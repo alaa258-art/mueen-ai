@@ -1,32 +1,19 @@
-# MUEEN AI V1 — مُعين
+# MUEEN AI V2 — مُعين
 
-A browser-deployable educational prototype built with Streamlit.
-
-## Features
-- Upload CSV assessment results.
-- Analyze mastery by skill using transparent calculations.
-- Suggest rule-based learning support activities.
-- Compare before/after mastery values.
-- Download a skill summary report.
-
-## Required CSV columns
-`Student`, `Skill`, `Score`, `MaxScore`
-
-Example:
-```csv
-Student,Skill,Score,MaxScore
-Student 1,Algorithm concepts,4,5
-Student 1,Sequencing steps,2,5
-```
-
-## Run locally (optional)
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
+- CSV assessment upload and transparent skill mastery analysis.
+- AI-generated learning support plans via OpenAI Responses API.
+- CSV report and TXT plan downloads.
 
 ## Deploy
-Push `app.py` and `requirements.txt` to a GitHub repository, then create a Streamlit Community Cloud app pointing to `app.py`.
+Upload `app.py` and `requirements.txt` to the root of the GitHub repository used by Streamlit.
+In Streamlit Community Cloud: App → Settings → Secrets, add:
 
-## Important
-This is an early prototype, not yet an autonomous LLM agent. It uses transparent rule-based analysis. Use synthetic or anonymized data only, and have educators review all recommendations.
+```toml
+OPENAI_API_KEY = "your-real-api-key"
+```
+
+Never commit API keys to GitHub or share them in chat. ChatGPT subscription and API billing are separate.
+
+Required CSV columns: `Student`, `Skill`, `Score`, `MaxScore`.
+
+Use synthetic or anonymized data only. Teacher review is required.
