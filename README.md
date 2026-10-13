@@ -1,13 +1,50 @@
-# MUEEN AI V3 | مُعين
+# MUEEN AI V3.1 | مُعين
 
-نسخة تجريبية تتضمن تحليل CSV، إنشاء خطة علاجية واختبار متابعة عبر OpenAI API، وتسجيل نتيجة قبل/بعد مع توصية بالخطوة التالية.
+نسخة مطوّرة من V3 تشمل:
+- تحليل ملف CSV وملخص إتقان المهارات.
+- إنشاء خطة علاجية واختبار متابعة باستخدام OpenAI API.
+- حساب الفرق بين التقييم القبلي والبعدي وتوصية الخطوة التالية.
+- حفظ النتائج القبلية والبعدية والتوصيات في Supabase.
+- عرض سجل محفوظ حسب رمز طالب/مجموعة وتنزيله CSV.
+
+## إعداد Streamlit Secrets
+
+في إعدادات تطبيق Streamlit Community Cloud → Settings → Secrets، أضف القيم التالية (استبدل القيم بمعلومات مشروعك، ولا ترسلها في المحادثة):
+
+```toml
+OPENAI_API_KEY = "ضع_مفتاح_OpenAI_هنا"
+SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
+SUPABASE_SECRET_KEY = "ضع_مفتاح_Supabase_Secret_هنا"
+```
+
+احصل على `SUPABASE_URL` من إعدادات المشروع. يتطلب هذا الإصدار `SUPABASE_SECRET_KEY` من نوع `sb_secret_...` في جهة الخادم فقط، لأن الجداول الحالية مفعّل عليها RLS ولا توجد سياسات كتابة/قراءة. لا تستخدم `sb_publishable_...` للحفظ في الوضع الحالي.
+
+## تنبيه أمني مهم
+
+- مفتاح Supabase Secret يتجاوز سياسات RLS ويمنح وصولًا واسعًا إلى قاعدة البيانات. هذا النمط مخصص لنموذج أولي خاص بالمعلم، وليس لتطبيق عام أو تطبيق يستخدمه الطلاب مباشرة.
+- لا تضع مفتاح Secret في GitHub أو في `app.py`، ولا تعرضه داخل واجهة التطبيق.
+- قبل فتح التطبيق للطلاب أو مستخدمين متعددين، ينبغي إضافة تسجيل دخول وسياسات RLS مقيّدة لكل مستخدم، أو إنشاء طبقة خادم آمنة بصلاحيات محدودة.
+- استخدم رموزًا مجهولة الهوية بدل أسماء الطلاب، وابدأ ببيانات تجريبية فقط.
+
+## الجداول المتوقعة
+
+يعتمد التطبيق على الجدولين اللذين أنشأتهما:
+- `students`: `student_code`, `grade`, `section` (يسمح بوجود سجلات مكررة إذا لم تضف قيد UNIQUE).
+- `assessment_records`: `student_code`, `skill`, `assessment_type`, `score`, `max_score`, `recommendation`, `created_at`.
+- `assessment_type` يجب أن يقبل `baseline` و`follow_up`.
+
+إذا ظهرت رسالة خطأ عند الحفظ، راجع أسماء الأعمدة وأنواعها في Supabase Table Editor. يتوقع التطبيق أن `id` و`created_at` يتم إنشاؤهما تلقائيًا.
 
 ## النشر
-1. استبدل `app.py` و`requirements.txt` في مستودع GitHub المتصل بـ Streamlit.
-2. احتفظ بسر `OPENAI_API_KEY` في Streamlit Settings → Secrets.
-3. انتظر إعادة النشر واختبر باستخدام بيانات تجريبية.
 
-## ملاحظات
-- لا ترفع بيانات شخصية أو معرفات الطلاب.
-- النتائج قبل/بعد لا تثبت وحدها أن التدخل سبب التحسن.
-- سجل المتابعة في هذه النسخة لا يُحفظ في قاعدة بيانات دائمة؛ نزّل CSV للاحتفاظ به.
+1. ارفع الملفات الموجودة في الحزمة إلى مستودع GitHub المتصل بـ Streamlit.
+2. أضف Secrets أعلاه من إعدادات التطبيق في Streamlit، وليس إلى GitHub.
+3. أعد تشغيل/نشر التطبيق.
+4. اختبر باستخدام البيانات النموذجية ورمز مثل `DEMO-GROUP`.
+5. احفظ التقييم القبلي، أنشئ تحليل متابعة، ثم احفظ التقييم البعدي وافتح السجل للتأكد من استمرار البيانات بعد إعادة تحميل التطبيق.
+
+## مراجع رسمية
+
+- Streamlit Secrets: https://docs.streamlit.io/develop/concepts/connections/secrets-management
+- Streamlit + Supabase: https://docs.streamlit.io/develop/tutorials/databases/supabase
+- Supabase API keys: https://supabase.com/docs/guides/getting-started/api-keys

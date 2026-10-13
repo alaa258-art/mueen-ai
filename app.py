@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from openai import OpenAI
 from datetime import datetime
+from supabase import create_client
 
 st.set_page_config(page_title="MUEEN AI V3 | مُعين", page_icon="🎓", layout="wide")
 st.markdown("<style>.main{direction:rtl} h1,h2,h3,p,label,div[data-testid='stMarkdownContainer']{text-align:right}</style>", unsafe_allow_html=True)
@@ -25,6 +26,49 @@ def create_quiz(model, subject, grade, skill, language):
     prompt=f"أنشئ اختبار متابعة من 5 أسئلة للمهارة {skill} في مادة {subject} للصف {grade} باللغة {language}. نوّع بين الاختيار من متعدد والإجابة القصيرة. اعرض الأسئلة أولًا ثم مفتاح إجابة منفصل للمعلم، مع معيار تصحيح مختصر. لا تفترض معلومات عن طالب بعينه."
     return ai(model,prompt)
 
+
+
+def get_supabase():
+    """Server-side connection. Keep the Supabase secret key only in Streamlit Secrets."""
+    try:
+        url = st.secrets.get("SUPABASE_URL", "")
+        key = st.secrets.get("SUPABASE_SECRET_KEY", "")
+        if not url or not key:
+            return None
+        return create_client(url, key)
+    except Exception:
+        return None
+
+def save_assessment_records(records):
+    client = get_supabase()
+    if client is None:
+        raise ValueError("اتصال Supabase غير مُعد. راجع إعدادات Secrets.")
+    client.table("assessment_records").insert(records).execute()
+
+def save_student(student_code, grade, section):
+    client = get_supabase()
+    if client is None:
+        raise ValueError("اتصال Supabase غير مُعد. راجع إعدادات Secrets.")
+    # Insert a simple roster record. The table may contain repeated codes unless
+    # the project has a unique constraint; no destructive upsert is performed.
+    client.table("students").insert({
+        "student_code": student_code,
+        "grade": grade,
+        "section": section
+    }).execute()
+
+def load_history(student_code):
+    client = get_supabase()
+    if client is None:
+        raise ValueError("اتصال Supabase غير مُعد. راجع إعدادات Secrets.")
+    response = (client.table("assessment_records")
+                .select("student_code,skill,assessment_type,score,max_score,recommendation,created_at")
+                .eq("student_code", student_code)
+                .order("created_at", desc=True)
+                .limit(200)
+                .execute())
+    return pd.DataFrame(response.data or [])
+
 def decide(before, after, threshold):
     delta=after-before
     if after>=threshold: return "إتقان مبدئي: يمكن للمعلم التفكير في الانتقال إلى مهارة تالية أو نشاط إثرائي.",delta
@@ -33,7 +77,8 @@ def decide(before, after, threshold):
 
 st.title("🎓 مُعين | MUEEN AI")
 st.subheader("وكيل دعم التعلم الذكي — النسخة الثالثة")
-st.caption("تحليل المهارات • خطط علاجية • اختبارات متابعة • توصية بالخطوة التالية")
+st.caption("تحليل المهارات • خطط علاجية • اختبارات متابعة • حفظ النتائج واستعراض سجل المتابعة")
+st.info("هذه نسخة تجريبية للمعلم. استخدم رموزًا تعليمية مستعارة بدل أسماء الطلاب، ولا تضع بيانات شخصية حساسة.")
 st.warning("استخدم بيانات تجريبية أو مجهولة الهوية فقط، وراجع المخرجات قبل استخدامها مع الطلاب.")
 with st.sidebar:
     st.header("إعدادات التحليل")
@@ -43,6 +88,11 @@ with st.sidebar:
     language=st.selectbox("لغة المخرجات",["العربية","English"])
     model=st.text_input("اسم نموذج API",value="gpt-4.1-mini")
 key=get_key()
+db_client=get_supabase()
+if db_client:
+    st.sidebar.success("قاعدة بيانات Supabase متصلة")
+else:
+    st.sidebar.warning("قاعدة البيانات غير مفعّلة: أضف SUPABASE_URL وSUPABASE_SECRET_KEY في Streamlit Secrets.")
 if key: st.success("تم العثور على مفتاح API. لن نعرضه داخل التطبيق.")
 else: st.info("أضف OPENAI_API_KEY إلى Settings → Secrets في Streamlit لتفعيل ميزات الذكاء الاصطناعي.")
 
@@ -82,6 +132,27 @@ if data is not None and not data.empty:
     st.markdown("### 2) تحليل المهارات وتحديد الأولوية")
     view=summary.rename(columns={"Skill":"المهارة","AverageMastery":"متوسط الإتقان (%)","Responses":"عدد الإجابات","Status":"الحالة"})
     st.dataframe(view,use_container_width=True,hide_index=True)
+    st.markdown("### 2.1) إعداد سجل المجموعة")
+    a1, a2, a3 = st.columns(3)
+    with a1: student_code = st.text_input("رمز الطالب/المجموعة (مجهول الهوية)", value="DEMO-GROUP", help="استخدم رمزًا مستعارًا، لا تكتب اسم الطالب.")
+    with a2: section = st.text_input("الشعبة", value="A")
+    with a3: db_grade = st.selectbox("الصف للحفظ", ["الخامس","السادس","السابع","الثامن","التاسع"], index=["الخامس","السادس","السابع","الثامن","التاسع"].index(grade))
+    if st.button("💾 حفظ نتائج التقييم القبلي في Supabase", use_container_width=True):
+        try:
+            save_student(student_code.strip(), db_grade, section.strip())
+            records = [{
+                "student_code": student_code.strip(),
+                "skill": str(row["Skill"]),
+                "assessment_type": "baseline",
+                "score": float(row["AverageMastery"]),
+                "max_score": 100.0,
+                "recommendation": "متوسط الإتقان القبلي للمجموعة؛ الحالة: " + str(row["Status"])
+            } for _, row in summary.iterrows()]
+            save_assessment_records(records)
+            st.success(f"تم حفظ {len(records)} سجلًا قبليًا بنجاح.")
+        except Exception as e:
+            st.error("تعذر حفظ النتائج. تأكد من إعداد Secrets وأسماء أعمدة الجداول.")
+            st.caption(str(e)[:500])
     weak=summary[summary["AverageMastery"]<threshold]["Skill"].tolist(); options=weak or summary["Skill"].tolist()
     skill=st.selectbox("اختر المهارة المستهدفة",options)
     mastery=float(summary.loc[summary["Skill"]==skill,"AverageMastery"].iloc[0])
@@ -126,10 +197,41 @@ if data is not None and not data.empty:
         else: st.warning(result["SuggestedNextStep"])
         st.caption("التوصية مساندة للمعلم وليست قرارًا آليًا نهائيًا.")
         st.download_button("تنزيل سجل المتابعة CSV",pd.DataFrame([result]).to_csv(index=False).encode("utf-8-sig"),"mueen_followup_record.csv","text/csv")
-    st.markdown("### 6) تنزيل تقرير المهارات")
+        if st.button("☁️ حفظ التقييم البعدي والتوصية في Supabase", use_container_width=True):
+            try:
+                save_assessment_records([{
+                    "student_code": student_code.strip(),
+                    "skill": str(skill),
+                    "assessment_type": "follow_up",
+                    "score": float(result["AfterPct"]),
+                    "max_score": 100.0,
+                    "recommendation": str(result["SuggestedNextStep"]) + f" | القبلي: {result['BeforePct']}% | التغير: {result['ChangePoints']:+.1f} نقطة"
+                }])
+                st.success("تم حفظ نتيجة التقييم البعدي والتوصية في قاعدة البيانات.")
+            except Exception as e:
+                st.error("تعذر حفظ النتيجة. تأكد من إعداد Secrets وصلاحية الاتصال.")
+                st.caption(str(e)[:500])
+    st.markdown("### 6) سجل المتابعة المحفوظ")
+    hist_code = st.text_input("رمز الطالب/المجموعة لعرض السجل", value=student_code, key="history_code")
+    if st.button("عرض السجل من Supabase"):
+        try:
+            history = load_history(hist_code.strip())
+            if history.empty:
+                st.info("لا توجد سجلات لهذا الرمز حتى الآن.")
+            else:
+                st.dataframe(history, use_container_width=True, hide_index=True)
+                st.download_button("تنزيل السجل المحفوظ CSV", history.to_csv(index=False).encode("utf-8-sig"), "mueen_saved_history.csv", "text/csv")
+        except Exception as e:
+            st.error("تعذر جلب السجل. تأكد من إعداد Secrets.")
+            st.caption(str(e)[:500])
+    st.markdown("### 7) تنزيل تقرير المهارات")
     st.download_button("تنزيل تقرير المهارات CSV",view.to_csv(index=False).encode("utf-8-sig"),"mueen_skill_report.csv","text/csv")
 else: st.warning("ارفع ملف CSV صالحًا أو فعّل البيانات النموذجية.")
-with st.expander("🔐 ربط مفتاح OpenAI API بأمان"):
-    st.markdown("1. أنشئ مفتاحًا من [OpenAI API Keys](https://platform.openai.com/api-keys).\n2. افتح التطبيق في [Streamlit Community Cloud](https://share.streamlit.io/).\n3. ادخل Settings → Secrets وأضف `OPENAI_API_KEY = \"مفتاحك\"`.\n4. لا تضع المفتاح في الكود أو GitHub ولا تشاركه في المحادثة.")
+with st.expander("🔐 إعداد مفاتيح OpenAI وSupabase بأمان"):
+    st.markdown("""1. احتفظ بمفتاح OpenAI في Streamlit → Settings → Secrets باسم `OPENAI_API_KEY`.
+2. أضف `SUPABASE_URL` و`SUPABASE_SECRET_KEY` إلى Secrets في إعدادات تطبيق Streamlit.
+3. مفتاح Supabase Secret يتجاوز RLS؛ لا تستخدمه إلا في تطبيق خاص موثوق من جهة الخادم، ولا تضعه في GitHub أو في الكود أو داخل واجهة التطبيق. لا تشاركه في المحادثة.
+4. مفتاح `sb_publishable_...` وحده لن يسمح بالحفظ ما دامت سياسات RLS لا تسمح بالعمليات.
+5. قبل فتح التطبيق لطلاب أو مستخدمين آخرين، استبدل وصول الخادم الإداري بتسجيل دخول وسياسات RLS دقيقة.""")
 st.divider()
-st.caption("MUEEN AI V3 نموذج أولي. سجل المتابعة لا يُحفظ في قاعدة بيانات دائمة؛ نزّل CSV للاحتفاظ به. لا ترفع بيانات تعريفية للطلاب.")
+st.caption("MUEEN AI V3.1 — عند تفعيل Supabase تُحفظ النتائج القبلية والبعدية وتوصيات المتابعة في قاعدة البيانات. استخدم رموزًا مجهولة الهوية واختبر ببيانات تجريبية أولًا.")
