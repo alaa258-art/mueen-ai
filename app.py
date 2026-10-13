@@ -69,6 +69,18 @@ def load_history(student_code):
                 .execute())
     return pd.DataFrame(response.data or [])
 
+def load_all_history(limit=1000):
+    """Load recent assessment records for the teacher dashboard."""
+    client = get_supabase()
+    if client is None:
+        raise ValueError("اتصال Supabase غير مُعد. راجع إعدادات Secrets.")
+    response = (client.table("assessment_records")
+                .select("student_code,skill,assessment_type,score,max_score,recommendation,created_at")
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute())
+    return pd.DataFrame(response.data or [])
+
 def decide(before, after, threshold):
     delta=after-before
     if after>=threshold: return "إتقان مبدئي: يمكن للمعلم التفكير في الانتقال إلى مهارة تالية أو نشاط إثرائي.",delta
@@ -95,6 +107,64 @@ else:
     st.sidebar.warning("قاعدة البيانات غير مفعّلة: أضف SUPABASE_URL وSUPABASE_SECRET_KEY في Streamlit Secrets.")
 if key: st.success("تم العثور على مفتاح API. لن نعرضه داخل التطبيق.")
 else: st.info("أضف OPENAI_API_KEY إلى Settings → Secrets في Streamlit لتفعيل ميزات الذكاء الاصطناعي.")
+
+st.markdown("## 📊 لوحة متابعة المعلم")
+st.caption("تعرض اللوحة السجلات المحفوظة في Supabase فقط، ولا تخلط بينها وبين البيانات النموذجية غير المحفوظة.")
+if db_client:
+    if st.button("🔄 تحديث لوحة المتابعة", use_container_width=True):
+        st.session_state["refresh_dashboard"] = datetime.now().isoformat()
+    try:
+        dashboard_df = load_all_history(limit=1000)
+        if dashboard_df.empty:
+            st.info("لا توجد سجلات محفوظة بعد. احفظ التقييم القبلي أو البعدي أولًا.")
+        else:
+            dashboard_df["score"] = pd.to_numeric(dashboard_df["score"], errors="coerce")
+            dashboard_df["max_score"] = pd.to_numeric(dashboard_df["max_score"], errors="coerce")
+            dashboard_df = dashboard_df.dropna(subset=["score", "max_score"])
+            dashboard_df["mastery_pct"] = (dashboard_df["score"] / dashboard_df["max_score"].replace(0, pd.NA) * 100).round(1)
+            dashboard_df = dashboard_df.dropna(subset=["mastery_pct"])
+            student_count = dashboard_df["student_code"].nunique()
+            baseline = dashboard_df[dashboard_df["assessment_type"].astype(str).str.lower().isin(["baseline", "قبلي"])]
+            followup = dashboard_df[dashboard_df["assessment_type"].astype(str).str.lower().isin(["follow_up", "followup", "بعدي"])]
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("رموز طلاب/مجموعات", int(student_count))
+            m2.metric("إجمالي السجلات", int(len(dashboard_df)))
+            m3.metric("سجلات قبلية", int(len(baseline)))
+            m4.metric("سجلات بعدية", int(len(followup)))
+            if not baseline.empty:
+                st.markdown("### متوسط الإتقان القبلي حسب المهارة")
+                skill_base = baseline.groupby("skill", as_index=False).agg(متوسط_الإتقان=("mastery_pct", "mean"), عدد_السجلات=("student_code", "count"))
+                skill_base["متوسط_الإتقان"] = skill_base["متوسط_الإتقان"].round(1)
+                st.bar_chart(skill_base.set_index("skill")["متوسط_الإتقان"])
+                st.dataframe(skill_base.rename(columns={"skill":"المهارة", "متوسط_الإتقان":"متوسط الإتقان (%)", "عدد_السجلات":"عدد السجلات"}), use_container_width=True, hide_index=True)
+            if not baseline.empty and not followup.empty:
+                st.markdown("### مقارنة القبلي والبعدي")
+                base_latest = (baseline.sort_values("created_at").drop_duplicates(["student_code", "skill"], keep="last")[["student_code", "skill", "mastery_pct"]].rename(columns={"mastery_pct":"القبلي (%)"}))
+                follow_latest = (followup.sort_values("created_at").drop_duplicates(["student_code", "skill"], keep="last")[["student_code", "skill", "mastery_pct"]].rename(columns={"mastery_pct":"البعدي (%)"}))
+                comparison = base_latest.merge(follow_latest, on=["student_code", "skill"], how="inner")
+                if not comparison.empty:
+                    comparison["التغير (نقطة مئوية)"] = (comparison["البعدي (%)"] - comparison["القبلي (%)"]).round(1)
+                    comparison["الحالة"] = comparison["البعدي (%)"].apply(lambda x: "بلغ حد الإتقان" if x >= threshold else "يحتاج إلى دعم")
+                    st.metric("متوسط التغير في الحالات ذات القياسين", f"{comparison['التغير (نقطة مئوية)'].mean():+.1f} نقطة مئوية")
+                    st.dataframe(comparison.rename(columns={"student_code":"رمز الطالب/المجموعة", "skill":"المهارة"}), use_container_width=True, hide_index=True)
+                    needs_support = comparison[comparison["البعدي (%)"] < threshold]
+                    if not needs_support.empty:
+                        st.markdown("### حالات تحتاج إلى متابعة علاجية")
+                        st.dataframe(needs_support.rename(columns={"student_code":"رمز الطالب/المجموعة", "skill":"المهارة"}), use_container_width=True, hide_index=True)
+                    st.download_button("تنزيل تقرير مقارنة القبلي والبعدي CSV", comparison.to_csv(index=False).encode("utf-8-sig"), "mueen_dashboard_comparison.csv", "text/csv")
+                else:
+                    st.info("توجد سجلات قبلية وبعدية، لكن لا توجد سجلات متطابقة في رمز الطالب/المجموعة والمهارة للمقارنة حتى الآن.")
+            st.markdown("### أحدث السجلات المحفوظة")
+            display_cols = [c for c in ["student_code", "skill", "assessment_type", "score", "max_score", "recommendation", "created_at"] if c in dashboard_df.columns]
+            st.dataframe(dashboard_df[display_cols].head(100).rename(columns={"student_code":"رمز الطالب/المجموعة", "skill":"المهارة", "assessment_type":"نوع التقييم", "score":"الدرجة", "max_score":"الدرجة الكلية", "recommendation":"التوصية", "created_at":"تاريخ الحفظ"}), use_container_width=True, hide_index=True)
+            st.download_button("تنزيل جميع السجلات الظاهرة CSV", dashboard_df.to_csv(index=False).encode("utf-8-sig"), "mueen_dashboard_records.csv", "text/csv")
+            if len(dashboard_df) >= 1000:
+                st.caption("تنبيه: عُرضت أحدث 1000 سجل فقط في لوحة المتابعة.")
+    except Exception as e:
+        st.error("تعذر تحميل لوحة المتابعة من Supabase.")
+        st.caption(str(e)[:500])
+else:
+    st.info("فعّل اتصال Supabase لعرض لوحة المتابعة المحفوظة.")
 
 demo=pd.DataFrame([
  {"Student":"طالب 1","Skill":"فهم مفهوم الخوارزمية","Score":4,"MaxScore":5},
