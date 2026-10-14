@@ -29,7 +29,7 @@ def create_quiz(model, subject, grade, skill, language):
 
 
 def get_auth_client():
-    """إنشاء اتصال Supabase بالمفتاح العام."""
+    """إنشاء اتصال Supabase باستخدام المفتاح العام فقط."""
     try:
         url = st.secrets.get("SUPABASE_URL", "")
         key = st.secrets.get("SUPABASE_PUBLISHABLE_KEY", "")
@@ -40,64 +40,146 @@ def get_auth_client():
         return None
 
 
+def clear_login():
+    for key in ("mueen_access_token", "mueen_refresh_token", "mueen_school_id", "mueen_school_role"):
+        st.session_state.pop(key, None)
+
+
 def get_supabase():
-    """الاتصال بقاعدة البيانات باستخدام جلسة المستخدم."""
+    """إعادة إنشاء اتصال موثّق بجلسة المستخدم وتخزين أي رموز مجددة."""
     try:
         client = get_auth_client()
-        if client is None:
-            return None
-
         access_token = st.session_state.get("mueen_access_token")
         refresh_token = st.session_state.get("mueen_refresh_token")
-
-        if not access_token or not refresh_token:
+        if client is None or not access_token or not refresh_token:
             return None
 
         client.auth.set_session(access_token, refresh_token)
+        session = client.auth.get_session()
+        if session:
+            st.session_state["mueen_access_token"] = session.access_token
+            st.session_state["mueen_refresh_token"] = session.refresh_token
         return client
     except Exception:
         return None
 
+
+def get_current_user_id(client):
+    response = client.auth.get_user()
+    user = getattr(response, "user", None)
+    if not user:
+        raise ValueError("تعذر التحقق من المستخدم. سجّل الدخول مجددًا.")
+    return str(user.id)
+
+
+def get_selected_school_id():
+    school_id = st.session_state.get("mueen_school_id")
+    if not school_id:
+        raise ValueError("اختر المدرسة أولًا.")
+    return school_id
+
+
+def get_user_schools(client, user_id):
+    """إرجاع المدارس التي للمستخدم عضوية نشطة فيها فقط."""
+    memberships = (
+        client.table("school_memberships")
+        .select("school_id,role,is_active")
+        .eq("user_id", user_id)
+        .eq("is_active", True)
+        .execute()
+    ).data or []
+    role_by_school = {
+        str(row["school_id"]): row["role"]
+        for row in memberships
+        if row.get("school_id") and row.get("role")
+    }
+    school_ids = list(role_by_school.keys())
+    if not school_ids:
+        return []
+
+    schools = (
+        client.table("schools")
+        .select("id,name")
+        .in_("id", school_ids)
+        .execute()
+    ).data or []
+
+    result = []
+    for school in schools:
+        school_id = str(school.get("id", ""))
+        if school_id in role_by_school:
+            result.append({
+                "id": school_id,
+                "name": school.get("name") or "مدرسة دون اسم",
+                "role": role_by_school[school_id],
+            })
+    return sorted(result, key=lambda item: item["name"])
+
+
 def save_assessment_records(records):
     client = get_supabase()
     if client is None:
-        raise ValueError("اتصال Supabase غير مُعد. راجع إعدادات Secrets.")
-    client.table("assessment_records").insert(records).execute()
+        raise ValueError("جلسة Supabase غير متاحة. سجّل الدخول مجددًا.")
+    user_id = get_current_user_id(client)
+    school_id = get_selected_school_id()
+
+    prepared_records = []
+    for record in records:
+        item = dict(record)
+        item["school_id"] = school_id
+        item["created_by"] = user_id
+        prepared_records.append(item)
+
+    client.table("assessment_records").insert(prepared_records).execute()
+
 
 def save_student(student_code, grade, section):
     client = get_supabase()
     if client is None:
-        raise ValueError("اتصال Supabase غير مُعد. راجع إعدادات Secrets.")
-    # Insert a simple roster record. The table may contain repeated codes unless
-    # the project has a unique constraint; no destructive upsert is performed.
+        raise ValueError("جلسة Supabase غير متاحة. سجّل الدخول مجددًا.")
+    user_id = get_current_user_id(client)
+    school_id = get_selected_school_id()
+
     client.table("students").insert({
         "student_code": student_code,
         "grade": grade,
-        "section": section
+        "section": section,
+        "school_id": school_id,
+        "created_by": user_id,
     }).execute()
+
 
 def load_history(student_code):
     client = get_supabase()
     if client is None:
-        raise ValueError("اتصال Supabase غير مُعد. راجع إعدادات Secrets.")
-    response = (client.table("assessment_records")
-                .select("student_code,skill,assessment_type,score,max_score,recommendation,created_at")
-                .eq("student_code", student_code)
-                .order("created_at", desc=True)
-                .limit(200)
-                .execute())
+        raise ValueError("جلسة Supabase غير متاحة. سجّل الدخول مجددًا.")
+    school_id = get_selected_school_id()
+    response = (
+        client.table("assessment_records")
+        .select("student_code,skill,assessment_type,score,max_score,recommendation,created_at")
+        .eq("school_id", school_id)
+        .eq("student_code", student_code)
+        .order("created_at", desc=True)
+        .limit(200)
+        .execute()
+    )
     return pd.DataFrame(response.data or [])
 
+
 def load_all_history(limit=1000):
-    """Load recent assessment records for the teacher dashboard."""
+    """تحميل أحدث سجلات المدرسة المختارة؛ وتظل RLS هي طبقة الحماية الأساسية."""
     client = get_supabase()
     if client is None:
-        raise ValueError("اتصال Supabase غير مُعد. راجع إعدادات Secrets.")
-    response = (client.table("assessment_records")
-                .select("student_code,skill,assessment_type,score,max_score,recommendation,created_at")
-                .order("created_at", desc=True)
-                .limit(limit)
-                .execute())
+        raise ValueError("جلسة Supabase غير متاحة. سجّل الدخول مجددًا.")
+    school_id = get_selected_school_id()
+    response = (
+        client.table("assessment_records")
+        .select("student_code,skill,assessment_type,score,max_score,recommendation,created_at")
+        .eq("school_id", school_id)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
     return pd.DataFrame(response.data or [])
 
 def decide(before, after, threshold):
@@ -110,53 +192,83 @@ def decide(before, after, threshold):
 if not st.session_state.get("mueen_access_token"):
     st.title("🔐 تسجيل الدخول | MUEEN AI")
     st.caption("سجّل الدخول بحسابك المعتمد للوصول إلى المنصة.")
-
     auth_client = get_auth_client()
-
     if auth_client is None:
-        st.error(
-            "تعذر إعداد Supabase. تحقق من "
-            "SUPABASE_URL وSUPABASE_PUBLISHABLE_KEY في Secrets."
-        )
+        st.error("تعذر إعداد Supabase. تحقق من SUPABASE_URL وSUPABASE_PUBLISHABLE_KEY في Streamlit Secrets.")
         st.stop()
 
     with st.form("mueen_login_form"):
         email = st.text_input("البريد الإلكتروني")
         password = st.text_input("كلمة المرور", type="password")
-        submitted = st.form_submit_button(
-            "تسجيل الدخول",
-            use_container_width=True
-        )
+        submitted = st.form_submit_button("تسجيل الدخول", use_container_width=True)
 
     if submitted:
         try:
             result = auth_client.auth.sign_in_with_password({
                 "email": email.strip(),
-                "password": password
+                "password": password,
             })
-
             if result.session:
-                st.session_state["mueen_access_token"] = (
-                    result.session.access_token
-                )
-                st.session_state["mueen_refresh_token"] = (
-                    result.session.refresh_token
-                )
+                st.session_state["mueen_access_token"] = result.session.access_token
+                st.session_state["mueen_refresh_token"] = result.session.refresh_token
                 st.rerun()
             else:
                 st.error("لم يتم إنشاء جلسة تسجيل دخول.")
         except Exception:
-            st.error(
-                "تعذر تسجيل الدخول. تحقق من بيانات الحساب "
-                "وحالة حسابك في Supabase Auth."
-            )
-
+            st.error("تعذر تسجيل الدخول. تحقق من بيانات الحساب وحالة حسابك في Supabase Auth.")
     st.stop()
 
-if st.button("تسجيل الخروج", key="mueen_logout"):
-    st.session_state.pop("mueen_access_token", None)
-    st.session_state.pop("mueen_refresh_token", None)
-    st.rerun()
+# تحقق من الجلسة قبل عرض أي بيانات
+session_client = get_supabase()
+if session_client is None:
+    clear_login()
+    st.warning("انتهت جلسة الدخول أو تعذر التحقق منها. سجّل الدخول مجددًا.")
+    st.stop()
+
+try:
+    current_user_id = get_current_user_id(session_client)
+    user_schools = get_user_schools(session_client, current_user_id)
+except Exception:
+    st.error("تعذر تحميل المدارس المرتبطة بحسابك. تحقق من سياسات RLS واتصال Supabase.")
+    st.stop()
+
+if not user_schools:
+    st.error("لا توجد مدرسة مرتبطة بحسابك بعضوية نشطة. اطلب من مسؤول النظام إضافتك إلى المدرسة.")
+    if st.button("تسجيل الخروج"):
+        try:
+            session_client.auth.sign_out()
+        except Exception:
+            pass
+        clear_login()
+        st.rerun()
+    st.stop()
+
+saved_school_id = st.session_state.get("mueen_school_id")
+valid_school_ids = [school["id"] for school in user_schools]
+if saved_school_id not in valid_school_ids:
+    saved_school_id = user_schools[0]["id"]
+
+selected_school = st.selectbox(
+    "🏫 المدرسة النشطة",
+    options=user_schools,
+    index=next(i for i, school in enumerate(user_schools) if school["id"] == saved_school_id),
+    format_func=lambda school: school["name"],
+    key="mueen_school_selector",
+)
+st.session_state["mueen_school_id"] = selected_school["id"]
+st.session_state["mueen_school_role"] = selected_school["role"]
+st.caption(f"الدور في المدرسة المختارة: {selected_school['role']}")
+
+logout_col, title_col = st.columns([1, 4])
+with logout_col:
+    if st.button("تسجيل الخروج", key="mueen_logout"):
+        try:
+            session_client.auth.sign_out()
+        except Exception:
+            pass
+        clear_login()
+        st.rerun()
+with title_col:
     st.title("🎓 مُعين | MUEEN AI")
 st.subheader("وكيل دعم التعلم الذكي — النسخة الثالثة")
 st.caption("تحليل المهارات • خطط علاجية • اختبارات متابعة • حفظ النتائج واستعراض سجل المتابعة")
@@ -174,7 +286,7 @@ db_client=get_supabase()
 if db_client:
     st.sidebar.success("قاعدة بيانات Supabase متصلة")
 else:
-    st.sidebar.warning("قاعدة البيانات غير مفعّلة: أضف SUPABASE_URL وSUPABASE_SECRET_KEY في Streamlit Secrets.")
+    st.sidebar.warning("تعذر الاتصال بقاعدة البيانات عبر جلسة المستخدم. تحقق من SUPABASE_URL وSUPABASE_PUBLISHABLE_KEY.")
 if key: st.success("تم العثور على مفتاح API. لن نعرضه داخل التطبيق.")
 else: st.info("أضف OPENAI_API_KEY إلى Settings → Secrets في Streamlit لتفعيل ميزات الذكاء الاصطناعي.")
 
@@ -369,9 +481,9 @@ if data is not None and not data.empty:
 else: st.warning("ارفع ملف CSV صالحًا أو فعّل البيانات النموذجية.")
 with st.expander("🔐 إعداد مفاتيح OpenAI وSupabase بأمان"):
     st.markdown("""1. احتفظ بمفتاح OpenAI في Streamlit → Settings → Secrets باسم `OPENAI_API_KEY`.
-2. أضف `SUPABASE_URL` و`SUPABASE_SECRET_KEY` إلى Secrets في إعدادات تطبيق Streamlit.
-3. مفتاح Supabase Secret يتجاوز RLS؛ لا تستخدمه إلا في تطبيق خاص موثوق من جهة الخادم، ولا تضعه في GitHub أو في الكود أو داخل واجهة التطبيق. لا تشاركه في المحادثة.
-4. مفتاح `sb_publishable_...` وحده لن يسمح بالحفظ ما دامت سياسات RLS لا تسمح بالعمليات.
-5. قبل فتح التطبيق لطلاب أو مستخدمين آخرين، استبدل وصول الخادم الإداري بتسجيل دخول وسياسات RLS دقيقة.""")
+2. أضف `SUPABASE_URL` و`SUPABASE_PUBLISHABLE_KEY` إلى Streamlit Secrets.
+3. لا تضع مفتاح Supabase Secret أو أي مفتاح خاص في GitHub أو داخل الواجهة أو في المحادثات.
+4. يعتمد الحفظ على تسجيل دخول المستخدم وسياسات RLS في Supabase؛ يجب اختبارها بحسابات ومدارس مختلفة قبل فتح التطبيق للآخرين.
+5. اختيار المدرسة في الواجهة ليس بديلًا عن RLS؛ قاعدة البيانات هي التي يجب أن تمنع الوصول غير المصرح به.""")
 st.divider()
 st.caption("MUEEN AI V3.1 — عند تفعيل Supabase تُحفظ النتائج القبلية والبعدية وتوصيات المتابعة في قاعدة البيانات. استخدم رموزًا مجهولة الهوية واختبر ببيانات تجريبية أولًا.")
