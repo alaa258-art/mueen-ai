@@ -322,45 +322,176 @@ if db_client:
             dashboard_df["score"] = pd.to_numeric(dashboard_df["score"], errors="coerce")
             dashboard_df["max_score"] = pd.to_numeric(dashboard_df["max_score"], errors="coerce")
             dashboard_df = dashboard_df.dropna(subset=["score", "max_score"])
-            dashboard_df["mastery_pct"] = (dashboard_df["score"] / dashboard_df["max_score"].replace(0, pd.NA) * 100).round(1)
-            dashboard_df = dashboard_df.dropna(subset=["mastery_pct"])
-            student_count = dashboard_df["student_code"].nunique()
-            baseline = dashboard_df[dashboard_df["assessment_type"].astype(str).str.lower().isin(["baseline", "قبلي"])]
-            followup = dashboard_df[dashboard_df["assessment_type"].astype(str).str.lower().isin(["follow_up", "followup", "بعدي"])]
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("رموز طلاب/مجموعات", int(student_count))
-            m2.metric("إجمالي السجلات", int(len(dashboard_df)))
-            m3.metric("سجلات قبلية", int(len(baseline)))
-            m4.metric("سجلات بعدية", int(len(followup)))
-            if not baseline.empty:
-                st.markdown("### متوسط الإتقان القبلي حسب المهارة")
-                skill_base = baseline.groupby("skill", as_index=False).agg(متوسط_الإتقان=("mastery_pct", "mean"), عدد_السجلات=("student_code", "count"))
-                skill_base["متوسط_الإتقان"] = skill_base["متوسط_الإتقان"].round(1)
-                st.bar_chart(skill_base.set_index("skill")["متوسط_الإتقان"])
-                st.dataframe(skill_base.rename(columns={"skill":"المهارة", "متوسط_الإتقان":"متوسط الإتقان (%)", "عدد_السجلات":"عدد السجلات"}), use_container_width=True, hide_index=True)
-            if not baseline.empty and not followup.empty:
-                st.markdown("### مقارنة القبلي والبعدي")
-                base_latest = (baseline.sort_values("created_at").drop_duplicates(["student_code", "skill"], keep="last")[["student_code", "skill", "mastery_pct"]].rename(columns={"mastery_pct":"القبلي (%)"}))
-                follow_latest = (followup.sort_values("created_at").drop_duplicates(["student_code", "skill"], keep="last")[["student_code", "skill", "mastery_pct"]].rename(columns={"mastery_pct":"البعدي (%)"}))
-                comparison = base_latest.merge(follow_latest, on=["student_code", "skill"], how="inner")
-                if not comparison.empty:
-                    comparison["التغير (نقطة مئوية)"] = (comparison["البعدي (%)"] - comparison["القبلي (%)"]).round(1)
-                    comparison["الحالة"] = comparison["البعدي (%)"].apply(lambda x: "بلغ حد الإتقان" if x >= threshold else "يحتاج إلى دعم")
-                    st.metric("متوسط التغير في الحالات ذات القياسين", f"{comparison['التغير (نقطة مئوية)'].mean():+.1f} نقطة مئوية")
-                    st.dataframe(comparison.rename(columns={"student_code":"رمز الطالب/المجموعة", "skill":"المهارة"}), use_container_width=True, hide_index=True)
-                    needs_support = comparison[comparison["البعدي (%)"] < threshold]
-                    if not needs_support.empty:
-                        st.markdown("### حالات تحتاج إلى متابعة علاجية")
-                        st.dataframe(needs_support.rename(columns={"student_code":"رمز الطالب/المجموعة", "skill":"المهارة"}), use_container_width=True, hide_index=True)
-                    st.download_button("تنزيل تقرير مقارنة القبلي والبعدي CSV", comparison.to_csv(index=False).encode("utf-8-sig"), "mueen_dashboard_comparison.csv", "text/csv")
+            dashboard_df = dashboard_df[dashboard_df["max_score"] > 0].copy()
+            dashboard_df["mastery_pct"] = (
+                dashboard_df["score"] / dashboard_df["max_score"] * 100
+            ).round(1)
+            dashboard_df["assessment_type"] = dashboard_df["assessment_type"].fillna("").astype(str)
+            dashboard_df["skill"] = dashboard_df["skill"].fillna("غير محدد").astype(str)
+            dashboard_df["student_code"] = dashboard_df["student_code"].fillna("غير محدد").astype(str)
+
+            # Filters apply only to the already school-scoped data returned by load_all_history.
+            st.markdown("### 🔎 تصفية التقارير")
+            f1, f2, f3 = st.columns(3)
+            with f1:
+                skill_options = ["كل المهارات"] + sorted(dashboard_df["skill"].unique().tolist())
+                selected_skill = st.selectbox("المهارة", skill_options, key="dashboard_skill_filter")
+            with f2:
+                type_map = {
+                    "كل أنواع التقييم": None,
+                    "قبلي": ["baseline", "قبلي"],
+                    "بعدي": ["follow_up", "followup", "بعدي"],
+                }
+                selected_type_label = st.selectbox(
+                    "نوع التقييم", list(type_map.keys()), key="dashboard_type_filter"
+                )
+            with f3:
+                student_options = ["كل الطلاب/المجموعات"] + sorted(dashboard_df["student_code"].unique().tolist())
+                selected_student = st.selectbox(
+                    "رمز الطالب/المجموعة", student_options, key="dashboard_student_filter"
+                )
+
+            filtered_df = dashboard_df.copy()
+            if selected_skill != "كل المهارات":
+                filtered_df = filtered_df[filtered_df["skill"] == selected_skill]
+            selected_types = type_map[selected_type_label]
+            if selected_types:
+                filtered_df = filtered_df[
+                    filtered_df["assessment_type"].str.lower().isin([x.lower() for x in selected_types])
+                ]
+            if selected_student != "كل الطلاب/المجموعات":
+                filtered_df = filtered_df[filtered_df["student_code"] == selected_student]
+
+            if filtered_df.empty:
+                st.info("لا توجد سجلات تطابق عوامل التصفية المحددة.")
+            else:
+                baseline = filtered_df[
+                    filtered_df["assessment_type"].str.lower().isin(["baseline", "قبلي"])
+                ]
+                followup = filtered_df[
+                    filtered_df["assessment_type"].str.lower().isin(["follow_up", "followup", "بعدي"])
+                ]
+                avg_mastery = float(filtered_df["mastery_pct"].mean())
+                students_n = int(filtered_df["student_code"].nunique())
+                below_threshold_n = int((filtered_df["mastery_pct"] < threshold).sum())
+
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("طلاب/مجموعات", students_n)
+                m2.metric("السجلات المعروضة", int(len(filtered_df)))
+                m3.metric("متوسط الإتقان", f"{avg_mastery:.1f}%")
+                m4.metric("سجلات دون حد الإتقان", below_threshold_n)
+
+                st.markdown("### 📊 مؤشرات الإتقان حسب المهارة")
+                skill_summary = (
+                    filtered_df.groupby(["skill", "assessment_type"], as_index=False)
+                    .agg(متوسط_الإتقان=("mastery_pct", "mean"), عدد_السجلات=("student_code", "count"))
+                )
+                skill_summary["متوسط_الإتقان"] = skill_summary["متوسط_الإتقان"].round(1)
+                st.bar_chart(
+                    filtered_df.groupby("skill")["mastery_pct"].mean().sort_values(ascending=False)
+                )
+                st.dataframe(
+                    skill_summary.rename(columns={
+                        "skill": "المهارة",
+                        "assessment_type": "نوع التقييم",
+                        "متوسط_الإتقان": "متوسط الإتقان (%)",
+                        "عدد_السجلات": "عدد السجلات",
+                    }),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                if not baseline.empty and not followup.empty:
+                    st.markdown("### 📈 مقارنة التقييم القبلي والبعدي")
+                    base_latest = (
+                        baseline.sort_values("created_at")
+                        .drop_duplicates(["student_code", "skill"], keep="last")
+                        [["student_code", "skill", "mastery_pct"]]
+                        .rename(columns={"mastery_pct": "القبلي (%)"})
+                    )
+                    follow_latest = (
+                        followup.sort_values("created_at")
+                        .drop_duplicates(["student_code", "skill"], keep="last")
+                        [["student_code", "skill", "mastery_pct"]]
+                        .rename(columns={"mastery_pct": "البعدي (%)"})
+                    )
+                    comparison = base_latest.merge(
+                        follow_latest, on=["student_code", "skill"], how="inner"
+                    )
+                    if not comparison.empty:
+                        comparison["التغير (نقطة مئوية)"] = (
+                            comparison["البعدي (%)"] - comparison["القبلي (%)"]
+                        ).round(1)
+                        comparison["الحالة"] = comparison["البعدي (%)"].apply(
+                            lambda x: "بلغ حد الإتقان" if x >= threshold else "يحتاج إلى دعم"
+                        )
+                        avg_change = float(comparison["التغير (نقطة مئوية)"].mean())
+                        achieved = int((comparison["البعدي (%)"] >= threshold).sum())
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("متوسط التغير", f"{avg_change:+.1f} نقطة")
+                        c2.metric("حالات بلغت حد الإتقان", achieved)
+                        c3.metric("حالات تحتاج إلى دعم", int(len(comparison) - achieved))
+                        st.dataframe(
+                            comparison.rename(columns={
+                                "student_code": "رمز الطالب/المجموعة",
+                                "skill": "المهارة",
+                            }),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                        needs_support = comparison[comparison["البعدي (%)"] < threshold]
+                        if not needs_support.empty:
+                            st.markdown("### 🎯 حالات مقترحة للمتابعة العلاجية")
+                            st.dataframe(
+                                needs_support.rename(columns={
+                                    "student_code": "رمز الطالب/المجموعة",
+                                    "skill": "المهارة",
+                                }),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                        st.download_button(
+                            "تنزيل تقرير المقارنة CSV",
+                            comparison.to_csv(index=False).encode("utf-8-sig"),
+                            "mueen_dashboard_comparison.csv",
+                            "text/csv",
+                        )
+                    else:
+                        st.info("توجد سجلات قبلية وبعدية، لكن لا توجد سجلات متطابقة في رمز الطالب/المجموعة والمهارة للمقارنة.")
                 else:
-                    st.info("توجد سجلات قبلية وبعدية، لكن لا توجد سجلات متطابقة في رمز الطالب/المجموعة والمهارة للمقارنة حتى الآن.")
-            st.markdown("### أحدث السجلات المحفوظة")
-            display_cols = [c for c in ["student_code", "skill", "assessment_type", "score", "max_score", "recommendation", "created_at"] if c in dashboard_df.columns]
-            st.dataframe(dashboard_df[display_cols].head(100).rename(columns={"student_code":"رمز الطالب/المجموعة", "skill":"المهارة", "assessment_type":"نوع التقييم", "score":"الدرجة", "max_score":"الدرجة الكلية", "recommendation":"التوصية", "created_at":"تاريخ الحفظ"}), use_container_width=True, hide_index=True)
-            st.download_button("تنزيل جميع السجلات الظاهرة CSV", dashboard_df.to_csv(index=False).encode("utf-8-sig"), "mueen_dashboard_records.csv", "text/csv")
-            if len(dashboard_df) >= 1000:
-                st.caption("تنبيه: عُرضت أحدث 1000 سجل فقط في لوحة المتابعة.")
+                    st.info("لإظهار المقارنة، اختر كل أنواع التقييم أو تأكد من وجود سجلات قبلية وبعدية ضمن التصفية.")
+
+                st.markdown("### 🗂️ أحدث السجلات المحفوظة")
+                display_cols = [
+                    c for c in [
+                        "student_code", "skill", "assessment_type", "score",
+                        "max_score", "mastery_pct", "recommendation", "created_at"
+                    ] if c in filtered_df.columns
+                ]
+                st.dataframe(
+                    filtered_df.sort_values("created_at", ascending=False)[display_cols].head(200).rename(
+                        columns={
+                            "student_code": "رمز الطالب/المجموعة",
+                            "skill": "المهارة",
+                            "assessment_type": "نوع التقييم",
+                            "score": "الدرجة",
+                            "max_score": "الدرجة الكلية",
+                            "mastery_pct": "الإتقان (%)",
+                            "recommendation": "التوصية",
+                            "created_at": "تاريخ الحفظ",
+                        }
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                st.download_button(
+                    "تنزيل السجلات المصفّاة CSV",
+                    filtered_df.to_csv(index=False).encode("utf-8-sig"),
+                    "mueen_dashboard_filtered_records.csv",
+                    "text/csv",
+                )
+                if len(dashboard_df) >= 1000:
+                    st.caption("تنبيه: عُرضت أحدث 1000 سجل فقط في لوحة المتابعة.")
     except Exception as e:
         st.error("تعذر تحميل لوحة المتابعة من Supabase.")
         st.caption(str(e)[:500])
