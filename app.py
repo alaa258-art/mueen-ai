@@ -28,16 +28,35 @@ def create_quiz(model, subject, grade, skill, language):
 
 
 
+def get_auth_client():
+    """إنشاء اتصال Supabase بالمفتاح العام."""
+    try:
+        url = st.secrets.get("SUPABASE_URL", "")
+        key = st.secrets.get("SUPABASE_PUBLISHABLE_KEY", "")
+        if not url or not key:
+            return None
+        return create_client(url, key)
+    except Exception:
+        return None
+
+
 def get_supabase():
-"""Server-side connection. Keep the Supabase secret key only in Streamlit Secrets."""
-try:
-url = st.secrets.get("SUPABASE_URL", "")
-key = st.secrets.get("SUPABASE_SECRET_KEY", "")
-if not url or not key:
-return None
-return create_client(url, key)
-except Exception:
-return None
+    """الاتصال بقاعدة البيانات باستخدام جلسة المستخدم."""
+    try:
+        client = get_auth_client()
+        if client is None:
+            return None
+
+        access_token = st.session_state.get("mueen_access_token")
+        refresh_token = st.session_state.get("mueen_refresh_token")
+
+        if not access_token or not refresh_token:
+            return None
+
+        client.auth.set_session(access_token, refresh_token)
+        return client
+    except Exception:
+        return None
 
 def save_assessment_records(records):
     client = get_supabase()
