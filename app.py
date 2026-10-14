@@ -134,19 +134,38 @@ def save_assessment_records(records):
 
 
 def save_student(student_code, grade, section):
+    """استخدم سجل الطالب الموجود في المدرسة بدل إنشاء سجل مكرر."""
     client = get_supabase()
     if client is None:
         raise ValueError("جلسة Supabase غير متاحة. سجّل الدخول مجددًا.")
     user_id = get_current_user_id(client)
     school_id = get_selected_school_id()
 
-    client.table("students").insert({
+    # ابحث عن الطالب داخل المدرسة النشطة أولًا.
+    existing = (
+        client.table("students")
+        .select("id,student_code,school_id")
+        .eq("student_code", student_code)
+        .eq("school_id", school_id)
+        .limit(1)
+        .execute()
+    ).data or []
+
+    if existing:
+        # السجل موجود بالفعل؛ لا تعِد إدخاله حتى لا يحدث تعارض unique.
+        return existing[0]
+
+    # لا يوجد سجل مطابق في المدرسة النشطة، لذا أنشئه.
+    # إذا كان الرمز مستخدمًا في مدرسة أخرى وكان student_code فريدًا عالميًا،
+    # ستظهر رسالة تعارض؛ عندها يلزم مراجعة تصميم القيد في قاعدة البيانات.
+    response = client.table("students").insert({
         "student_code": student_code,
         "grade": grade,
         "section": section,
         "school_id": school_id,
         "created_by": user_id,
     }).execute()
+    return (response.data or [None])[0]
 
 
 def load_history(student_code):
