@@ -29,15 +29,15 @@ def create_quiz(model, subject, grade, skill, language):
 
 
 def get_supabase():
-    """Server-side connection. Keep the Supabase secret key only in Streamlit Secrets."""
-    try:
-        url = st.secrets.get("SUPABASE_URL", "")
-        key = st.secrets.get("SUPABASE_SECRET_KEY", "")
-        if not url or not key:
-            return None
-        return create_client(url, key)
-    except Exception:
-        return None
+"""Server-side connection. Keep the Supabase secret key only in Streamlit Secrets."""
+try:
+url = st.secrets.get("SUPABASE_URL", "")
+key = st.secrets.get("SUPABASE_SECRET_KEY", "")
+if not url or not key:
+return None
+return create_client(url, key)
+except Exception:
+return None
 
 def save_assessment_records(records):
     client = get_supabase()
@@ -87,7 +87,58 @@ def decide(before, after, threshold):
     if delta>0: return "يوجد تحسن، لكن الإتقان المستهدف لم يتحقق بعد. يُقترح تدريب إضافي أو مثال جديد ثم إعادة التقييم.",delta
     return "لم يظهر تحسن في الدرجة المدخلة. راجع ملاءمة الأسئلة وطريقة التدريس، وجرّب نشاطًا بديلًا قبل إعادة التقييم.",delta
 
-st.title("🎓 مُعين | MUEEN AI")
+# بوابة تسجيل الدخول إلى مُعين AI
+if not st.session_state.get("mueen_access_token"):
+    st.title("🔐 تسجيل الدخول | MUEEN AI")
+    st.caption("سجّل الدخول بحسابك المعتمد للوصول إلى المنصة.")
+
+    auth_client = get_auth_client()
+
+    if auth_client is None:
+        st.error(
+            "تعذر إعداد Supabase. تحقق من "
+            "SUPABASE_URL وSUPABASE_PUBLISHABLE_KEY في Secrets."
+        )
+        st.stop()
+
+    with st.form("mueen_login_form"):
+        email = st.text_input("البريد الإلكتروني")
+        password = st.text_input("كلمة المرور", type="password")
+        submitted = st.form_submit_button(
+            "تسجيل الدخول",
+            use_container_width=True
+        )
+
+    if submitted:
+        try:
+            result = auth_client.auth.sign_in_with_password({
+                "email": email.strip(),
+                "password": password
+            })
+
+            if result.session:
+                st.session_state["mueen_access_token"] = (
+                    result.session.access_token
+                )
+                st.session_state["mueen_refresh_token"] = (
+                    result.session.refresh_token
+                )
+                st.rerun()
+            else:
+                st.error("لم يتم إنشاء جلسة تسجيل دخول.")
+        except Exception:
+            st.error(
+                "تعذر تسجيل الدخول. تحقق من بيانات الحساب "
+                "وحالة حسابك في Supabase Auth."
+            )
+
+    st.stop()
+
+if st.button("تسجيل الخروج", key="mueen_logout"):
+    st.session_state.pop("mueen_access_token", None)
+    st.session_state.pop("mueen_refresh_token", None)
+    st.rerun()
+    st.title("🎓 مُعين | MUEEN AI")
 st.subheader("وكيل دعم التعلم الذكي — النسخة الثالثة")
 st.caption("تحليل المهارات • خطط علاجية • اختبارات متابعة • حفظ النتائج واستعراض سجل المتابعة")
 st.info("هذه نسخة تجريبية للمعلم. استخدم رموزًا تعليمية مستعارة بدل أسماء الطلاب، ولا تضع بيانات شخصية حساسة.")
