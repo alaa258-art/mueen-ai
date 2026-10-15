@@ -332,33 +332,37 @@ if db_client:
 
             # Filters apply only to the already school-scoped data returned by load_all_history.
            
-st.markdown("### 🔎 تصفية التقارير")
 
-# فلتر الفترة الزمنية
-if "created_at" in dashboard_df.columns:
-    dashboard_df["created_at"] = pd.to_datetime(
-        dashboard_df["created_at"], errors="coerce", utc=True
-    )
-    dashboard_df = dashboard_df.dropna(subset=["created_at"])
+            st.markdown("### 🔎 تصفية التقارير")
 
-    date_options = {
-        "كل الفترات": None,
-        "آخر 7 أيام": 7,
-        "آخر 30 يومًا": 30,
-        "آخر 90 يومًا": 90,
-    }
-    selected_period = st.selectbox(
-        "الفترة الزمنية",
-        list(date_options.keys()),
-        key="dashboard_date_filter",
-    )
-    days = date_options[selected_period]
+            # فلتر الفترة الزمنية
+            if "created_at" in dashboard_df.columns:
+                dashboard_df["created_at"] = pd.to_datetime(
+                    dashboard_df["created_at"], errors="coerce", utc=True
+                )
+                dashboard_df = dashboard_df.dropna(subset=["created_at"])
 
-    if days is not None:
-        cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=days)
-        dashboard_df = dashboard_df[dashboard_df["created_at"] >= cutoff]
-else:
-    st.warning("لا يتوفر تاريخ إنشاء السجلات؛ تعذرت تصفية التقرير زمنيًا.")
+                date_options = {
+                    "كل الفترات": None,
+                    "آخر 7 أيام": 7,
+                    "آخر 30 يومًا": 30,
+                    "آخر 90 يومًا": 90,
+                }
+                selected_period = st.selectbox(
+                    "الفترة الزمنية",
+                    list(date_options.keys()),
+                    key="dashboard_date_filter",
+                )
+                days = date_options[selected_period]
+
+                if days is not None:
+                    cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=days)
+                    dashboard_df = dashboard_df[
+                        dashboard_df["created_at"] >= cutoff
+                    ]
+            else:
+                st.warning("لا يتوفر تاريخ إنشاء السجلات؛ تعذرت تصفية التقرير زمنيًا.")
+
 
             f1, f2, f3 = st.columns(3)
             with f1:
