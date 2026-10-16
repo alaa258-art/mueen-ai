@@ -385,7 +385,14 @@ if db_client:
                 selected_student = st.selectbox(
                     "رمز الطالب/المجموعة", student_options, key="dashboard_student_filter"
                 )
-
+            st.write(
+                "عدد السجلات القبلية:",
+                int(dashboard_df["assessment_type"].str.lower().isin(["baseline", "قبلي"]).sum()),
+            )
+            st.write(
+                "عدد السجلات البعدية:",
+                int(dashboard_df["assessment_type"].str.lower().isin(["follow_up", "followup", "بعدي"]).sum()),
+            )
             filtered_df = dashboard_df.copy()
             if selected_skill != "كل المهارات":
                 filtered_df = filtered_df[filtered_df["skill"] == selected_skill]
