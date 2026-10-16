@@ -363,7 +363,10 @@ if db_client:
             else:
                 st.warning("لا يتوفر تاريخ إنشاء السجلات؛ تعذرت تصفية التقرير زمنيًا.")
 
-
+            st.write("عدد السجلات بعد فلتر التاريخ:", len(dashboard_df))
+            if not dashboard_df.empty:
+                st.write("أقدم سجل:", dashboard_df["created_at"].min())
+                st.write("أحدث سجل:", dashboard_df["created_at"].max())
             f1, f2, f3 = st.columns(3)
             with f1:
                 skill_options = ["كل المهارات"] + sorted(dashboard_df["skill"].unique().tolist())
