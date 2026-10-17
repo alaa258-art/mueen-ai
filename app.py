@@ -569,16 +569,7 @@ if db_client:
                         "تحتاج مؤشرات التحسن إلى وجود تقييم قبلي وتقييم بعدي "
                         "ضمن الفلاتر الحالية."
                     )
-                            st.markdown("### 🎯 حالات مقترحة للمتابعة العلاجية")
-                            st.dataframe(
-                                needs_support.rename(columns={
-                                    "student_code": "رمز الطالب/المجموعة",
-                                    "skill": "المهارة",
-                                }),
-                                use_container_width=True,
-                                hide_index=True,
-                            )
-                        st.download_button(
+                            
                             "تنزيل تقرير المقارنة CSV",
                             comparison.to_csv(index=False).encode("utf-8-sig"),
                             "mueen_dashboard_comparison.csv",
