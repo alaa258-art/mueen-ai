@@ -443,7 +443,7 @@ if db_client:
                     hide_index=True,
                 )
 
-                                if not baseline.empty and not followup.empty:
+                    if not baseline.empty and not followup.empty:
                     st.markdown("### 📈 مؤشرات التحسن: التقييم القبلي والبعدي")
 
                     base_latest = (
