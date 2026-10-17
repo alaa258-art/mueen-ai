@@ -443,46 +443,132 @@ if db_client:
                     hide_index=True,
                 )
 
-                if not baseline.empty and not followup.empty:
-                    st.markdown("### 📈 مقارنة التقييم القبلي والبعدي")
+                                if not baseline.empty and not followup.empty:
+                    st.markdown("### 📈 مؤشرات التحسن: التقييم القبلي والبعدي")
+
                     base_latest = (
                         baseline.sort_values("created_at")
                         .drop_duplicates(["student_code", "skill"], keep="last")
                         [["student_code", "skill", "mastery_pct"]]
                         .rename(columns={"mastery_pct": "القبلي (%)"})
                     )
+
                     follow_latest = (
                         followup.sort_values("created_at")
                         .drop_duplicates(["student_code", "skill"], keep="last")
                         [["student_code", "skill", "mastery_pct"]]
                         .rename(columns={"mastery_pct": "البعدي (%)"})
                     )
+
                     comparison = base_latest.merge(
-                        follow_latest, on=["student_code", "skill"], how="inner"
+                        follow_latest,
+                        on=["student_code", "skill"],
+                        how="inner",
                     )
+
                     if not comparison.empty:
                         comparison["التغير (نقطة مئوية)"] = (
                             comparison["البعدي (%)"] - comparison["القبلي (%)"]
                         ).round(1)
-                        comparison["الحالة"] = comparison["البعدي (%)"].apply(
-                            lambda x: "بلغ حد الإتقان" if x >= threshold else "يحتاج إلى دعم"
+
+                        comparison["الحالة"] = comparison[
+                            "التغير (نقطة مئوية)"
+                        ].apply(
+                            lambda x: (
+                                "متحسن" if x > 0
+                                else "متراجع" if x < 0
+                                else "ثابت"
+                            )
                         )
-                        avg_change = float(comparison["التغير (نقطة مئوية)"].mean())
-                        achieved = int((comparison["البعدي (%)"] >= threshold).sum())
-                        c1, c2, c3 = st.columns(3)
-                        c1.metric("متوسط التغير", f"{avg_change:+.1f} نقطة")
-                        c2.metric("حالات بلغت حد الإتقان", achieved)
-                        c3.metric("حالات تحتاج إلى دعم", int(len(comparison) - achieved))
+
+                        comparison["مستوى البعدي"] = comparison[
+                            "البعدي (%)"
+                        ].apply(
+                            lambda x: (
+                                "بلغ حد الإتقان"
+                                if x >= threshold
+                                else "يحتاج إلى دعم"
+                            )
+                        )
+
+                        avg_change = float(
+                            comparison["التغير (نقطة مئوية)"].mean()
+                        )
+                        improved_n = int(
+                            (comparison["الحالة"] == "متحسن").sum()
+                        )
+                        unchanged_n = int(
+                            (comparison["الحالة"] == "ثابت").sum()
+                        )
+                        declined_n = int(
+                            (comparison["الحالة"] == "متراجع").sum()
+                        )
+                        achieved_n = int(
+                            (comparison["البعدي (%)"] >= threshold).sum()
+                        )
+                        support_n = int(
+                            (comparison["البعدي (%)"] < threshold).sum()
+                        )
+
+                        st.caption(
+                            "تُحسب المقارنة فقط للحالات التي لديها تقييم قبلي "
+                            "وبعدي للطالب/المجموعة نفسها والمهارة نفسها."
+                        )
+
+                        c1, c2, c3, c4 = st.columns(4)
+                        c1.metric("متوسط التحسن", f"{avg_change:+.1f} نقطة")
+                        c2.metric("حالات متحسنة", improved_n)
+                        c3.metric("حالات ثابتة", unchanged_n)
+                        c4.metric("حالات متراجعة", declined_n)
+
+                        c5, c6 = st.columns(2)
+                        c5.metric("بلغت حد الإتقان", achieved_n)
+                        c6.metric("تحتاج إلى دعم", support_n)
+
                         st.dataframe(
-                            comparison.rename(columns={
-                                "student_code": "رمز الطالب/المجموعة",
-                                "skill": "المهارة",
-                            }),
+                            comparison.rename(
+                                columns={
+                                    "student_code": "رمز الطالب/المجموعة",
+                                    "skill": "المهارة",
+                                }
+                            ),
                             use_container_width=True,
                             hide_index=True,
                         )
-                        needs_support = comparison[comparison["البعدي (%)"] < threshold]
+
+                        needs_support = comparison[
+                            comparison["البعدي (%)"] < threshold
+                        ]
                         if not needs_support.empty:
+                            st.markdown("#### 🎯 حالات تحتاج إلى دعم إضافي")
+                            st.dataframe(
+                                needs_support[
+                                    [
+                                        "student_code",
+                                        "skill",
+                                        "القبلي (%)",
+                                        "البعدي (%)",
+                                        "التغير (نقطة مئوية)",
+                                    ]
+                                ].rename(
+                                    columns={
+                                        "student_code": "رمز الطالب/المجموعة",
+                                        "skill": "المهارة",
+                                    }
+                                ),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                    else:
+                        st.info(
+                            "لا توجد حالات لها تقييم قبلي وبعدي "
+                            "للطالب/المجموعة نفسها والمهارة نفسها ضمن الفلاتر الحالية."
+                        )
+                else:
+                    st.info(
+                        "تحتاج مؤشرات التحسن إلى وجود تقييم قبلي وتقييم بعدي "
+                        "ضمن الفلاتر الحالية."
+                    )
                             st.markdown("### 🎯 حالات مقترحة للمتابعة العلاجية")
                             st.dataframe(
                                 needs_support.rename(columns={
