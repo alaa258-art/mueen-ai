@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import json
 from openai import OpenAI
 from datetime import datetime
 from supabase import create_client
@@ -25,6 +26,24 @@ def create_plan(model, subject, grade, skill, mastery, language, notes, group):
 def create_quiz(model, subject, grade, skill, language):
     prompt=f"أنشئ اختبار متابعة من 5 أسئلة للمهارة {skill} في مادة {subject} للصف {grade} باللغة {language}. نوّع بين الاختيار من متعدد والإجابة القصيرة. اعرض الأسئلة أولًا ثم مفتاح إجابة منفصل للمعلم، مع معيار تصحيح مختصر. لا تفترض معلومات عن طالب بعينه."
     return ai(model,prompt)
+
+
+def create_achievement_analysis(model, aggregate_json, threshold, language):
+    """تحليل تعليمي من بيانات مجمعة فقط؛ لا ترسل رموز الطلاب أو سجلاتهم الفردية."""
+    prompt = f"""أنت محلل بيانات تعليمية مساعد للمعلم. حلل مؤشرات التحصيل التالية بحذر وباللغة {language}.
+حد الإتقان المعتمد: {threshold}%.
+بيانات مجمعة حسب المهارة ونوع التقييم فقط (لا تحتوي على أسماء أو رموز طلاب):
+{aggregate_json}
+التزم بالقواعد التالية:
+1) استشهد بالأرقام الموجودة في البيانات فقط، ولا تخترع أعدادًا أو نسبًا.
+2) ميّز بين الملاحظة المؤكدة والفرضية التي تحتاج تحققًا من المعلم.
+3) لا تستنتج تحسنًا قبليًا/بعديًا إلا إذا كانت البيانات تعرض النوعين بوضوح، ولا تعتبر المتوسطات المجمعة دليلًا على تحسن الطالب الفردي.
+4) اذكر أقوى المهارات وأبرز المهارات التي تحتاج دعمًا استنادًا إلى المتوسطات المعروضة وحد الإتقان.
+5) اقترح ثلاث خطوات تعليمية عملية قابلة للتنفيذ، وخطوة تحقق لاحقة باستخدام اختبار متابعة.
+6) لا تشخّص الطالب ولا تتخذ قرارًا آليًا بشأنه؛ اجعل التوصيات مساندة للمعلم.
+7) إذا كانت البيانات قليلة أو غير كافية للمقارنة، صرّح بذلك بوضوح.
+استخدم العناوين: ملخص المؤشرات، نقاط القوة، أولويات الدعم، خطوات مقترحة، حدود التحليل."""
+    return ai(model, prompt)
 
 
 
@@ -430,6 +449,38 @@ if db_client:
                     use_container_width=True,
                     hide_index=True,
                 )
+
+                st.markdown("### 🧠 التحليل الذكي للتحصيل الدراسي")
+                st.caption("يُرسل إلى نموذج الذكاء الاصطناعي ملخص مجمّع حسب المهارة ونوع التقييم فقط، دون رموز الطلاب أو سجلاتهم الفردية.")
+                if not key:
+                    st.info("أضف OPENAI_API_KEY إلى Streamlit Secrets لتفعيل التحليل الذكي.")
+                elif st.button("✨ إنشاء تحليل ذكي للمؤشرات الحالية", key="run_achievement_analysis", use_container_width=True):
+                    try:
+                        aggregate_for_ai = skill_summary[["skill", "assessment_type", "متوسط_الإتقان", "عدد_السجلات"]].copy()
+                        aggregate_for_ai["متوسط_الإتقان"] = aggregate_for_ai["متوسط_الإتقان"].round(1)
+                        aggregate_json = json.dumps(aggregate_for_ai.to_dict(orient="records"), ensure_ascii=False)
+                        with st.spinner("يحلل مُعين المؤشرات المجمعة..."):
+                            st.session_state["mueen_achievement_analysis"] = create_achievement_analysis(
+                                model, aggregate_json, threshold, language
+                            )
+                        st.session_state["mueen_achievement_analysis_scope"] = {
+                            "school_id": get_selected_school_id(),
+                            "filters": [selected_period, selected_skill, selected_type_label, selected_student],
+                        }
+                    except Exception as e:
+                        st.error("تعذر إنشاء التحليل الذكي. تحقق من إعدادات API وإتاحة النموذج.")
+                        st.caption(str(e)[:500])
+                analysis_scope = st.session_state.get("mueen_achievement_analysis_scope", {})
+                if st.session_state.get("mueen_achievement_analysis") and analysis_scope.get("school_id") == get_selected_school_id() and analysis_scope.get("filters") == [selected_period, selected_skill, selected_type_label, selected_student]:
+                    st.markdown(st.session_state["mueen_achievement_analysis"])
+                    st.download_button(
+                        "تنزيل التحليل الذكي TXT",
+                        st.session_state["mueen_achievement_analysis"],
+                        "mueen_achievement_analysis.txt",
+                        "text/plain",
+                        key="download_achievement_analysis",
+                    )
+                st.caption("راجع الاستنتاجات والتوصيات قبل تطبيقها؛ التحليل الذكي مساعد للمعلم وليس حكمًا نهائيًا على أداء الطلاب.")
 
                 if not baseline.empty and not followup.empty:
                     st.markdown("### 📈 مؤشرات التحسن: التقييم القبلي والبعدي")
