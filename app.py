@@ -459,6 +459,118 @@ if db_client:
                         "لا يُعد الفرق بينهما مقياسًا مؤكدًا للتحسن الفردي."
                     )
 
+                st.markdown("### 📈 مقارنة التحسن الفعلي بين القبلي والبعدي")
+
+                # نستخدم سجلات المدرسة والفترة المحددتين،
+                # مع تجاهل فلتر نوع التقييم حتى تتوفر المرحلتان.
+                comparison_source = dashboard_df.copy()
+
+                if selected_skill != "كل المهارات":
+                    comparison_source = comparison_source[
+                        comparison_source["skill"] == selected_skill
+                    ]
+
+                if selected_student != "كل الطلاب/المجموعات":
+                    comparison_source = comparison_source[
+                        comparison_source["student_code"] == selected_student
+                    ]
+
+                comparison_source["type_norm"] = (
+                    comparison_source["assessment_type"]
+                    .astype(str).str.strip().str.lower()
+                )
+
+                baseline_rows = (
+                    comparison_source[
+                        comparison_source["type_norm"].isin(["baseline", "قبلي"])
+                    ]
+                    .sort_values("created_at")
+                    .drop_duplicates(
+                        ["student_code", "skill"], keep="last"
+                    )
+                    [["student_code", "skill", "mastery_pct"]]
+                    .rename(columns={"mastery_pct": "القبلي (%)"})
+                )
+
+                followup_rows = (
+                    comparison_source[
+                        comparison_source["type_norm"].isin(
+                            ["follow_up", "followup", "بعدي"]
+                        )
+                    ]
+                    .sort_values("created_at")
+                    .drop_duplicates(
+                        ["student_code", "skill"], keep="last"
+                    )
+                    [["student_code", "skill", "mastery_pct"]]
+                    .rename(columns={"mastery_pct": "البعدي (%)"})
+                )
+
+                comparison = baseline_rows.merge(
+                    followup_rows,
+                    on=["student_code", "skill"],
+                    how="inner"
+                )
+
+                if comparison.empty:
+                    st.info(
+                        "لا توجد بيانات قبلية وبعدية للطالب والمهارة نفسيهما "
+                        "ضمن الفترة المحددة. احفظ التقييمين أولًا."
+                    )
+                else:
+                    comparison["التغير (نقطة مئوية)"] = (
+                        comparison["البعدي (%)"] - comparison["القبلي (%)"]
+                    ).round(1)
+
+                    comparison["حالة التحسن"] = comparison[
+                        "التغير (نقطة مئوية)"
+                    ].apply(
+                        lambda x: (
+                            "تحسن" if x > 0
+                            else "دون تغير" if x == 0
+                            else "تراجع"
+                        )
+                    )
+
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("عدد المقارنات", len(comparison))
+                    c2.metric(
+                        "متوسط التغير",
+                        f"{comparison['التغير (نقطة مئوية)'].mean():+.1f}"
+                        " نقطة مئوية"
+                    )
+                    c3.metric(
+                        "حالات التحسن",
+                        int((comparison["التغير (نقطة مئوية)"] > 0).sum())
+                    )
+                    c4.metric(
+                        "حالات التراجع",
+                        int((comparison["التغير (نقطة مئوية)"] < 0).sum())
+                    )
+
+                    display_comparison = comparison.rename(
+                        columns={
+                            "student_code": "رمز الطالب/المجموعة",
+                            "skill": "المهارة"
+                        }
+                    )
+
+                    st.dataframe(
+                        display_comparison,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    st.download_button(
+                        "📥 تنزيل تقرير مقارنة التحسن CSV",
+                        display_comparison.to_csv(
+                            index=False
+                        ).encode("utf-8-sig"),
+                        "mueen_improvement_comparison.csv",
+                        "text/csv",
+                        key="download_improvement_comparison"
+                    )
+
 
                 st.markdown("### 📊 مؤشرات الإتقان حسب المهارة")
                 skill_summary = (
