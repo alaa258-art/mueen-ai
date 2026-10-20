@@ -414,49 +414,50 @@ if db_client:
             if filtered_df.empty:
                 st.info("لا توجد سجلات تطابق عوامل التصفية المحددة.")
             else:
+                
                 baseline = filtered_df[
                     filtered_df["assessment_type"].str.lower().isin(["baseline", "قبلي"])
                 ]
                 followup = filtered_df[
                     filtered_df["assessment_type"].str.lower().isin(["follow_up", "followup", "بعدي"])
                 ]
-                
-avg_mastery = float(filtered_df["mastery_pct"].mean())
-students_n = int(filtered_df["student_code"].nunique())
-below_threshold_n = int(
-    (filtered_df["mastery_pct"] < threshold).sum()
-)
 
-baseline_avg = (
-    float(baseline["mastery_pct"].mean())
-    if not baseline.empty else None
-)
-followup_avg = (
-    float(followup["mastery_pct"].mean())
-    if not followup.empty else None
-)
+                avg_mastery = float(filtered_df["mastery_pct"].mean())
+                students_n = int(filtered_df["student_code"].nunique())
+                below_threshold_n = int(
+                    (filtered_df["mastery_pct"] < threshold).sum()
+                )
 
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("طلاب/مجموعات", students_n)
-m2.metric("السجلات المعروضة", int(len(filtered_df)))
-m3.metric("متوسط جميع السجلات", f"{avg_mastery:.1f}%")
-m4.metric("سجلات دون حد الإتقان", below_threshold_n)
+                baseline_avg = (
+                    float(baseline["mastery_pct"].mean())
+                    if not baseline.empty else None
+                )
+                followup_avg = (
+                    float(followup["mastery_pct"].mean())
+                    if not followup.empty else None
+                )
 
-m5, m6 = st.columns(2)
-m5.metric(
-    "متوسط الإتقان القبلي",
-    f"{baseline_avg:.1f}%" if baseline_avg is not None else "لا توجد بيانات"
-)
-m6.metric(
-    "متوسط الإتقان البعدي",
-    f"{followup_avg:.1f}%" if followup_avg is not None else "لا توجد بيانات"
-)
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("طلاب/مجموعات", students_n)
+                m2.metric("السجلات المعروضة", int(len(filtered_df)))
+                m3.metric("متوسط جميع السجلات", f"{avg_mastery:.1f}%")
+                m4.metric("سجلات دون حد الإتقان", below_threshold_n)
 
-if baseline_avg is not None and followup_avg is not None:
-    st.caption(
-        "تنبيه: متوسطا القبلي والبعدي قد يعتمدان على سجلات مختلفة؛ "
-        "لا يُعد الفرق بينهما مقياسًا مؤكدًا للتحسن الفردي."
-    )
+                m5, m6 = st.columns(2)
+                m5.metric(
+                    "متوسط الإتقان القبلي",
+                    f"{baseline_avg:.1f}%" if baseline_avg is not None else "لا توجد بيانات"
+                )
+                m6.metric(
+                    "متوسط الإتقان البعدي",
+                    f"{followup_avg:.1f}%" if followup_avg is not None else "لا توجد بيانات"
+                )
+
+                if baseline_avg is not None and followup_avg is not None:
+                    st.caption(
+                        "تنبيه: متوسطا القبلي والبعدي قد يعتمدان على سجلات مختلفة؛ "
+                        "لا يُعد الفرق بينهما مقياسًا مؤكدًا للتحسن الفردي."
+                    )
 
 
                 st.markdown("### 📊 مؤشرات الإتقان حسب المهارة")
