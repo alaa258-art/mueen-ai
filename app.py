@@ -571,6 +571,53 @@ if db_client:
                         key="download_improvement_comparison"
                     )
 
+                    st.markdown("### 🎯 مؤشرات أثر التدخل العلاجي")
+
+                    total_comparisons = len(comparison)
+                    improved_n = int(
+                        (comparison["التغير (نقطة مئوية)"] > 0).sum()
+                    )
+                    unchanged_n = int(
+                        (comparison["التغير (نقطة مئوية)"] == 0).sum()
+                    )
+                    declined_n = int(
+                        (comparison["التغير (نقطة مئوية)"] < 0).sum()
+                    )
+
+                    improvement_rate = (
+                        improved_n / total_comparisons * 100
+                        if total_comparisons > 0 else 0.0
+                    )
+
+                    avg_change = (
+                        float(comparison["التغير (نقطة مئوية)"].mean())
+                        if total_comparisons > 0 else 0.0
+                    )
+
+                    impact1, impact2, impact3 = st.columns(3)
+                    impact1.metric(
+                        "نسبة حالات التحسن",
+                        f"{improvement_rate:.1f}%"
+                    )
+                    impact2.metric(
+                        "متوسط التغير",
+                        f"{avg_change:+.1f} نقطة مئوية"
+                    )
+                    impact3.metric(
+                        "إجمالي المقارنات",
+                        total_comparisons
+                    )
+
+                    impact4, impact5, impact6 = st.columns(3)
+                    impact4.metric("حالات التحسن", improved_n)
+                    impact5.metric("دون تغير", unchanged_n)
+                    impact6.metric("حالات التراجع", declined_n)
+
+                    st.caption(
+                        "تعكس هذه المؤشرات المقارنات المتاحة فقط، "
+                        "ولا تثبت وحدها أن التحسن ناتج عن التدخل العلاجي."
+                    )
+
 
                 st.markdown("### 📊 مؤشرات الإتقان حسب المهارة")
                 skill_summary = (
