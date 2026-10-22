@@ -698,32 +698,19 @@ if db_client:
                         skill_analysis["متوسط_الإتقان"] < threshold
                     ].copy()
 
-                    if below_target.empty:
-                        st.success("جميع المهارات المعروضة بلغت حد الإتقان المحدد.")
-                    else:
-                        st.dataframe(
-                            below_target.rename(columns={
-                                "skill": "المهارة",
-                                "متوسط_الإتقان": "متوسط الإتقان (%)",
-                                "عدد_السجلات": "عدد السجلات",
-                                "الفجوة عن الهدف": "الفجوة عن الهدف (نقطة)",
-                            })[
-                                [
-                                    "المهارة",
-                                    "متوسط الإتقان (%)",
-                                    "عدد السجلات",
-                                    "الفجوة عن الهدف (نقطة)",
-                                ]
-                            ],
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-
                     # 4. تحليل التحسن حسب المهارة من المقارنات المتطابقة
                     st.markdown("### 3️⃣ المهارات التي تحسنت بعد التدخل")
-                                
 
-                if "comparison" in locals() and not comparison.empty:
+                    skill_change = pd.DataFrame(
+                        columns=[
+                            "skill",
+                            "متوسط_التغير",
+                            "عدد_المقارنات",
+                            "نتيجة التدخل",
+                        ]
+                    )
+
+                    if "comparison" in locals() and not comparison.empty:
                         skill_change = (
                             comparison.groupby("skill", as_index=False)
                             .agg(
@@ -731,6 +718,7 @@ if db_client:
                                 عدد_المقارنات=("التغير (نقطة مئوية)", "count"),
                             )
                         )
+
                         skill_change["متوسط_التغير"] = (
                             skill_change["متوسط_التغير"].round(1)
                         )
@@ -748,6 +736,16 @@ if db_client:
                                 "skill": "المهارة",
                                 "متوسط_التغير": "متوسط التغير (نقطة مئوية)",
                                 "عدد_المقارنات": "عدد المقارنات",
+                            }),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                    else:
+                        st.info(
+                            "لا توجد مقارنات قبلية وبعدية متطابقة "
+                            "لتحديد المهارات التي تحسنت."
+                        )
+
                             }),
                             use_container_width=True,
                             hide_index=True,
