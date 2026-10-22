@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import html
 from openai import OpenAI
 from datetime import datetime
 from supabase import create_client
@@ -974,6 +975,202 @@ if db_client:
                         "تحتاج مؤشرات التحسن إلى وجود تقييم قبلي وتقييم بعدي "
                         "ضمن الفلاتر الحالية."
                     )
+
+                # التقرير التنفيذي الذكي لمدير المدرسة
+                st.markdown("## 🏫 التقرير التنفيذي الذكي لمدير المدرسة")
+                st.caption(
+                    "تقرير موجز لدعم القرارات التعليمية، "
+                    "اعتمادًا على البيانات المعروضة والفلاتر الحالية."
+                )
+
+                if filtered_df.empty:
+                    st.info("لا توجد بيانات كافية لإنشاء التقرير التنفيذي.")
+                else:
+                    report_df = filtered_df.copy()
+                    report_df["mastery_pct"] = pd.to_numeric(
+                        report_df["mastery_pct"], errors="coerce"
+                    )
+                    report_df = report_df.dropna(
+                        subset=["skill", "mastery_pct"]
+                    )
+
+                    if report_df.empty:
+                        st.info("لا توجد نتائج إتقان صالحة لإنشاء التقرير.")
+                    else:
+                        report_avg = float(report_df["mastery_pct"].mean())
+                        report_skills = (
+                            report_df.groupby("skill", as_index=False)
+                            .agg(
+                                متوسط_الإتقان=("mastery_pct", "mean"),
+                                عدد_السجلات=("mastery_pct", "count"),
+                            )
+                        )
+                        report_skills["متوسط_الإتقان"] = (
+                            report_skills["متوسط_الإتقان"].round(1)
+                        )
+                        report_weak = report_skills[
+                            report_skills["متوسط_الإتقان"] < threshold
+                        ].sort_values("متوسط_الإتقان")
+
+                        report_baseline = report_df[
+                            report_df["assessment_type"].astype(str).str.lower()
+                            .isin(["baseline", "قبلي"])
+                        ]
+                        report_followup = report_df[
+                            report_df["assessment_type"].astype(str).str.lower()
+                            .isin(["follow_up", "followup", "بعدي"])
+                        ]
+
+                        baseline_mean = (
+                            float(report_baseline["mastery_pct"].mean())
+                            if not report_baseline.empty else None
+                        )
+                        followup_mean = (
+                            float(report_followup["mastery_pct"].mean())
+                            if not report_followup.empty else None
+                        )
+
+                        r1, r2, r3 = st.columns(3)
+                        r1.metric("متوسط الإتقان", f"{report_avg:.1f}%")
+                        r2.metric("حد الإتقان المستهدف", f"{threshold}%")
+                        r3.metric("مهارات دون الحد", len(report_weak))
+
+                        st.markdown("### الملخص التنفيذي")
+                        if report_avg >= threshold:
+                            st.success(
+                                "متوسط الإتقان العام بلغ حد الإتقان المستهدف "
+                                "أو تجاوزه. يُنصح بالمحافظة على المستوى "
+                                "ومعالجة أي مهارات منخفضة بصورة فردية."
+                            )
+                        else:
+                            st.warning(
+                                f"متوسط الإتقان العام {report_avg:.1f}%، "
+                                f"وهو أقل من الهدف المحدد ({threshold}%). "
+                                "تُوصى الأولوية بمراجعة المهارات الأقل إتقانًا "
+                                "وتنفيذ تدخلات تعليمية موجهة."
+                            )
+
+                        st.markdown("### أبرز نقاط القوة")
+                        strengths = report_skills[
+                            report_skills["متوسط_الإتقان"] >= threshold
+                        ].sort_values("متوسط_الإتقان", ascending=False)
+
+                        if strengths.empty:
+                            st.write(
+                                "لم تبلغ أي مهارة حد الإتقان المستهدف "
+                                "ضمن البيانات الحالية."
+                            )
+                        else:
+                            for _, row in strengths.iterrows():
+                                st.write(
+                                    f"• {row['skill']}: "
+                                    f"{row['متوسط_الإتقان']:.1f}%"
+                                )
+
+                        st.markdown("### أولويات الدعم")
+                        if report_weak.empty:
+                            st.write(
+                                "لا توجد مهارات دون حد الإتقان "
+                                "وفق البيانات والفلاتر الحالية."
+                            )
+                        else:
+                            st.dataframe(
+                                report_weak.rename(columns={
+                                    "skill": "المهارة",
+                                    "متوسط_الإتقان": "متوسط الإتقان (%)",
+                                    "عدد_السجلات": "عدد السجلات",
+                                }),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                            st.write(
+                                "التوصية: إعداد أنشطة علاجية للمهارات "
+                                "الأقل إتقانًا، ثم إجراء تقييم متابعة "
+                                "لقياس التقدم."
+                            )
+
+                        st.markdown("### مؤشرات التقييم القبلي والبعدي")
+                        q1, q2 = st.columns(2)
+                        q1.metric(
+                            "متوسط التقييم القبلي",
+                            f"{baseline_mean:.1f}%"
+                            if baseline_mean is not None else "لا توجد بيانات"
+                        )
+                        q2.metric(
+                            "متوسط التقييم البعدي",
+                            f"{followup_mean:.1f}%"
+                            if followup_mean is not None else "لا توجد بيانات"
+                        )
+
+                        if baseline_mean is not None and followup_mean is not None:
+                            st.caption(
+                                "تنبيه: الفرق بين المتوسطين العامين لا يثبت "
+                                "تحسن الطلاب أنفسهم ما لم تُطابق سجلات الطالب "
+                                "والمهارة بين التقييمين."
+                            )
+
+                        # إنشاء تقرير HTML قابل للتنزيل والطباعة إلى PDF
+                        safe_skills = []
+                        for _, row in report_skills.sort_values(
+                            "متوسط_الإتقان"
+                        ).iterrows():
+                            safe_skills.append(
+                                "<tr><td>"
+                                + html.escape(str(row["skill"]))
+                                + "</td><td>"
+                                + f"{row['متوسط_الإتقان']:.1f}%"
+                                + "</td><td>"
+                                + str(int(row["عدد_السجلات"]))
+                                + "</td></tr>"
+                            )
+
+                        report_html = (
+                            "<!DOCTYPE html><html lang='ar' dir='rtl'><head>"
+                            "<meta charset='utf-8'>"
+                            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+                            "<title>التقرير التنفيذي - MUEEN AI</title>"
+                            "<style>"
+                            "body{font-family:Arial,sans-serif;margin:36px;line-height:1.8;color:#222}"
+                            "h1,h2{color:#174a6e}table{border-collapse:collapse;width:100%}"
+                            "th,td{border:1px solid #ccc;padding:9px;text-align:right}"
+                            "th{background:#eef3f7}.metric{padding:12px;background:#f5f7f9;"
+                            "margin:12px 0;border-radius:8px}"
+                            "@media print{body{margin:15mm}}"
+                            "</style></head><body>"
+                            "<h1>التقرير التنفيذي الذكي لمدير المدرسة</h1>"
+                            "<p>منصة MUEEN AI - مُعين</p>"
+                            "<div class='metric'><b>متوسط الإتقان العام:</b> "
+                            + f"{report_avg:.1f}%"
+                            + "<br><b>حد الإتقان المستهدف:</b> "
+                            + f"{threshold}%"
+                            + "<br><b>عدد المهارات دون الحد:</b> "
+                            + str(len(report_weak))
+                            + "</div><h2>نتائج المهارات</h2>"
+                            "<table><thead><tr><th>المهارة</th>"
+                            "<th>متوسط الإتقان</th><th>عدد السجلات</th>"
+                            "</tr></thead><tbody>"
+                            + "".join(safe_skills)
+                            + "</tbody></table><h2>التوصية التنفيذية</h2>"
+                            "<p>توجيه الدعم التعليمي إلى المهارات الأقل إتقانًا، "
+                            "وتنفيذ أنشطة علاجية مناسبة، ثم متابعة النتائج "
+                            "بتقييم لاحق. تُراجع النتائج من قبل المعلم والإدارة "
+                            "قبل اتخاذ القرارات.</p>"
+                            "<p>هذا التقرير مبني على البيانات والفلاتر الحالية "
+                            "ولا يثبت وحده العلاقة السببية بين التدخل والتحسن.</p>"
+                            "</body></html>"
+                        )
+
+                        st.download_button(
+                            "📄 تنزيل التقرير التنفيذي HTML",
+                            data=report_html.encode("utf-8"),
+                            file_name="mueen_executive_report.html",
+                            mime="text/html",
+                            key="download_mueen_executive_report",
+                        )
+                        st.caption(
+                            "يمكن فتح ملف HTML في المتصفح ثم اختيار طباعة "
+                            "وحفظ بصيغة PDF."
+                        )
 
                 st.markdown("### 🗂️ أحدث السجلات المحفوظة")
                 display_cols = [
