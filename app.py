@@ -725,7 +725,7 @@ if db_client:
                     columns=["skill", "متوسط_التغير", "عدد_المقارنات"]
                 )
                     # استخدام المقارنات المطابقة من لوحة مقارنة التحسن
-                    if "comparison" in locals() and not comparison.empty:
+                        if "comparison" in locals() and not comparison.empty:
                         skill_change = (
                             comparison.groupby("skill", as_index=False)
                             .agg(
