@@ -313,6 +313,343 @@ st.subheader("وكيل دعم التعلم الذكي — النسخة الثا�
 st.caption("تحليل المهارات • خطط علاجية • اختبارات متابعة • حفظ النتائج واستعراض سجل المتابعة")
 st.info("هذه نسخة تجريبية للمعلم. استخدم رموزًا تعليمية مستعارة بدل أسماء الطلاب، ولا تضع بيانات شخصية حساسة.")
 st.warning("استخدم بيانات تجريبية أو مجهولة الهوية فقط، وراجع المخرجات قبل استخدامها مع الطلاب.")
+
+# =========================================================
+# إدارة الهيكل الأكاديمي - MUEEN AI
+# =========================================================
+st.markdown("## 🏫 إدارة الهيكل الأكاديمي")
+
+academic_role = st.session_state.get("mueen_school_role", "")
+academic_school_id = st.session_state.get("mueen_school_id")
+academic_can_manage = academic_role in ("principal", "coordinator")
+
+with st.expander("فتح إدارة الصفوف والشعب والمواد", expanded=False):
+    if not academic_can_manage:
+        st.info("هذه الإدارة متاحة لمدير المدرسة والمنسق فقط.")
+    else:
+        academic_client = get_supabase()
+
+        if academic_client is None:
+            st.error("تعذر الاتصال بقاعدة البيانات. سجّل الدخول مجددًا.")
+        else:
+            academic_user_id = get_current_user_id(academic_client)
+
+            academic_tabs = st.tabs([
+                "إضافة شعبة",
+                "إضافة مادة",
+                "ربط المواد بالشعب",
+                "عرض الهيكل"
+            ])
+
+            # -------------------------------------------------
+            # 1) إضافة شعبة
+            # -------------------------------------------------
+            with academic_tabs[0]:
+                st.markdown("### إضافة صف وشعبة")
+
+                with st.form("mueen_add_academic_section"):
+                    section_grade = st.selectbox(
+                        "الصف",
+                        options=[5, 6, 7, 8, 9, 10, 11, 12],
+                        format_func=lambda x: f"الصف {x}"
+                    )
+
+                    if section_grade <= 8:
+                        section_track = "none"
+                        st.caption("الحلقة الثانية — لا يوجد مسار.")
+                    else:
+                        section_track = st.selectbox(
+                            "المسار",
+                            options=["general", "advanced"],
+                            format_func=lambda x: (
+                                "عام" if x == "general" else "متقدم"
+                            )
+                        )
+
+                    section_name = st.text_input(
+                        "اسم الشعبة",
+                        placeholder="مثال: A أو 9-1"
+                    )
+
+                    section_year = st.selectbox(
+                        "السنة الدراسية",
+                        options=["2026-2027", "2027-2028"]
+                    )
+
+                    section_submit = st.form_submit_button(
+                        "حفظ الشعبة",
+                        use_container_width=True
+                    )
+
+                if section_submit:
+                    if not section_name.strip():
+                        st.error("أدخل اسم الشعبة أولًا.")
+                    else:
+                        try:
+                            section_payload = {
+                                "school_id": academic_school_id,
+                                "grade_level": section_grade,
+                                "track": section_track,
+                                "section_name": section_name.strip(),
+                                "academic_year": section_year,
+                                "created_by": academic_user_id,
+                            }
+
+                            academic_client.table(
+                                "academic_sections"
+                            ).insert(section_payload).execute()
+
+                            st.success("تم حفظ الشعبة بنجاح.")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error("تعذر حفظ الشعبة.")
+                            st.caption(str(e)[:500])
+
+            # -------------------------------------------------
+            # 2) إضافة مادة
+            # -------------------------------------------------
+            with academic_tabs[1]:
+                st.markdown("### إضافة مادة دراسية")
+
+                with st.form("mueen_add_academic_subject"):
+                    subject_grade = st.selectbox(
+                        "الصف المرتبط بالمادة",
+                        options=[5, 6, 7, 8, 9, 10, 11, 12],
+                        format_func=lambda x: f"الصف {x}",
+                        key="academic_subject_grade"
+                    )
+
+                    if subject_grade <= 8:
+                        subject_track = "none"
+                        st.caption("الحلقة الثانية — لا يوجد مسار.")
+                    else:
+                        subject_track = st.selectbox(
+                            "مسار المادة",
+                            options=["general", "advanced"],
+                            format_func=lambda x: (
+                                "عام" if x == "general" else "متقدم"
+                            ),
+                            key="academic_subject_track"
+                        )
+
+                    subject_name = st.text_input(
+                        "اسم المادة",
+                        placeholder="مثال: الرياضيات"
+                    )
+
+                    subject_year = st.selectbox(
+                        "السنة الدراسية للمادة",
+                        options=["2026-2027", "2027-2028"],
+                        key="academic_subject_year"
+                    )
+
+                    subject_submit = st.form_submit_button(
+                        "حفظ المادة",
+                        use_container_width=True
+                    )
+
+                if subject_submit:
+                    if not subject_name.strip():
+                        st.error("أدخل اسم المادة أولًا.")
+                    else:
+                        try:
+                            subject_payload = {
+                                "school_id": academic_school_id,
+                                "grade_level": subject_grade,
+                                "track": subject_track,
+                                "subject_name": subject_name.strip(),
+                                "academic_year": subject_year,
+                                "created_by": academic_user_id,
+                            }
+
+                            academic_client.table(
+                                "academic_subjects"
+                            ).insert(subject_payload).execute()
+
+                            st.success("تم حفظ المادة بنجاح.")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error("تعذر حفظ المادة.")
+                            st.caption(str(e)[:500])
+
+            # -------------------------------------------------
+            # 3) ربط مادة بشعبة
+            # -------------------------------------------------
+            with academic_tabs[2]:
+                st.markdown("### ربط المواد بالشعب")
+
+                try:
+                    sections_response = (
+                        academic_client.table("academic_sections")
+                        .select(
+                            "id,grade_level,track,section_name,academic_year"
+                        )
+                        .eq("school_id", academic_school_id)
+                        .order("grade_level")
+                        .execute()
+                    )
+
+                    subjects_response = (
+                        academic_client.table("academic_subjects")
+                        .select(
+                            "id,grade_level,track,subject_name,academic_year"
+                        )
+                        .eq("school_id", academic_school_id)
+                        .order("grade_level")
+                        .execute()
+                    )
+
+                    all_sections = sections_response.data or []
+                    all_subjects = subjects_response.data or []
+
+                    with st.form("mueen_link_section_subject"):
+                        chosen_section = st.selectbox(
+                            "الشعبة",
+                            options=all_sections,
+                            format_func=lambda x: (
+                                f"الصف {x['grade_level']} - "
+                                f"{x['section_name']} | "
+                                f"{'عام' if x['track'] == 'general' else 'متقدم' if x['track'] == 'advanced' else 'بدون مسار'} | "
+                                f"{x['academic_year']}"
+                            ) if all_sections else "لا توجد شعب محفوظة"
+                        )
+
+                        if all_sections:
+                            compatible_subjects = [
+                                item for item in all_subjects
+                                if item["grade_level"] == chosen_section["grade_level"]
+                                and item["track"] == chosen_section["track"]
+                                and item["academic_year"] == chosen_section["academic_year"]
+                            ]
+                        else:
+                            compatible_subjects = []
+
+                        chosen_subject = st.selectbox(
+                            "المادة",
+                            options=compatible_subjects,
+                            format_func=lambda x: x["subject_name"],
+                            disabled=not compatible_subjects
+                        )
+
+                        link_submit = st.form_submit_button(
+                            "ربط المادة بالشعبة",
+                            use_container_width=True,
+                            disabled=not all_sections or not compatible_subjects
+                        )
+
+                    if not all_sections:
+                        st.info("أضف شعبة أولًا.")
+                    elif not compatible_subjects:
+                        st.info(
+                            "لا توجد مواد مطابقة لهذه الشعبة. "
+                            "أضف مادة للصف والمسار والسنة نفسها."
+                        )
+
+                    if link_submit and all_sections and compatible_subjects:
+                        try:
+                            link_payload = {
+                                "school_id": academic_school_id,
+                                "section_id": chosen_section["id"],
+                                "subject_id": chosen_subject["id"],
+                                "grade_level": chosen_section["grade_level"],
+                                "track": chosen_section["track"],
+                                "created_by": academic_user_id,
+                            }
+
+                            academic_client.table(
+                                "section_subjects"
+                            ).insert(link_payload).execute()
+
+                            st.success("تم ربط المادة بالشعبة بنجاح.")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(
+                                "تعذر الربط. قد يكون هذا الربط موجودًا مسبقًا."
+                            )
+                            st.caption(str(e)[:500])
+
+                except Exception as e:
+                    st.error("تعذر تحميل بيانات الشعب والمواد.")
+                    st.caption(str(e)[:500])
+
+            # -------------------------------------------------
+            # 4) عرض الهيكل الأكاديمي
+            # -------------------------------------------------
+            with academic_tabs[3]:
+                st.markdown("### الشعب المسجلة")
+                try:
+                    sections_view = (
+                        academic_client.table("academic_sections")
+                        .select(
+                            "grade_level,track,section_name,academic_year"
+                        )
+                        .eq("school_id", academic_school_id)
+                        .order("grade_level")
+                        .execute()
+                    )
+
+                    sections_df = pd.DataFrame(sections_view.data or [])
+
+                    if sections_df.empty:
+                        st.info("لم تتم إضافة شعب حتى الآن.")
+                    else:
+                        sections_df["track"] = sections_df["track"].map({
+                            "none": "بدون مسار",
+                            "general": "عام",
+                            "advanced": "متقدم",
+                        }).fillna(sections_df["track"])
+
+                        st.dataframe(
+                            sections_df.rename(columns={
+                                "grade_level": "الصف",
+                                "track": "المسار",
+                                "section_name": "الشعبة",
+                                "academic_year": "السنة الدراسية",
+                            }),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+
+                    st.markdown("### المواد المسجلة")
+                    subjects_view = (
+                        academic_client.table("academic_subjects")
+                        .select(
+                            "grade_level,track,subject_name,academic_year"
+                        )
+                        .eq("school_id", academic_school_id)
+                        .order("grade_level")
+                        .execute()
+                    )
+
+                    subjects_df = pd.DataFrame(subjects_view.data or [])
+
+                    if subjects_df.empty:
+                        st.info("لم تتم إضافة مواد حتى الآن.")
+                    else:
+                        subjects_df["track"] = subjects_df["track"].map({
+                            "none": "بدون مسار",
+                            "general": "عام",
+                            "advanced": "متقدم",
+                        }).fillna(subjects_df["track"])
+
+                        st.dataframe(
+                            subjects_df.rename(columns={
+                                "grade_level": "الصف",
+                                "track": "المسار",
+                                "subject_name": "المادة",
+                                "academic_year": "السنة الدراسية",
+                            }),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+
+                except Exception as e:
+                    st.error("تعذر عرض الهيكل الأكاديمي.")
+                    st.caption(str(e)[:500])
+
 with st.sidebar:
     st.header("إعدادات التحليل")
     subject=st.selectbox("المادة",["الحوسبة","الرياضيات","العلوم","اللغة العربية","اللغة الإنجليزية"])
