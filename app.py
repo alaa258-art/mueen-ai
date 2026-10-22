@@ -785,7 +785,7 @@ if db_client:
                             use_container_width=True,
                             hide_index=True,
                         )
-                   else:
+                    else:
                         st.success(
                             "لا توجد مهارات دون حد الإتقان تحتاج إلى أولوية علاجية "
                             "وفق البيانات والفلاتر الحالية."
