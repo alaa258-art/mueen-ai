@@ -449,30 +449,48 @@ with st.expander("فتح إدارة الصفوف والشعب والمواد", e
                         use_container_width=True
                     )
 
-                if subject_submit:
-                    if not subject_name.strip():
-                        st.error("أدخل اسم المادة أولًا.")
-                    else:
-                        try:
-                            subject_payload = {
-                                "school_id": academic_school_id,
-                                "grade_level": subject_grade,
-                                "track": subject_track,
-                                "subject_name": subject_name.strip(),
-                                "academic_year": subject_year,
-                                "created_by": academic_user_id,
-                            }
+                
+if subject_submit:
+    if not subject_name.strip():
+        st.error("أدخل اسم المادة أولًا.")
+    else:
+        try:
+            existing_subject = (
+                academic_client.table("academic_subjects")
+                .select("id")
+                .eq("school_id", academic_school_id)
+                .eq("grade_level", subject_grade)
+                .eq("track", subject_track)
+                .eq("subject_name", subject_name.strip())
+                .execute()
+            )
 
-                            academic_client.table(
-                                "academic_subjects"
-                            ).insert(subject_payload).execute()
+            if existing_subject.data:
+                st.warning(
+                    "هذه المادة مسجلة بالفعل لهذا الصف والمسار. "
+                    "يمكنك استخدامها من تبويب ربط المواد بالشعب."
+                )
+            else:
+                subject_payload = {
+                    "school_id": academic_school_id,
+                    "grade_level": subject_grade,
+                    "track": subject_track,
+                    "subject_name": subject_name.strip(),
+                    "academic_year": subject_year,
+                    "created_by": academic_user_id,
+                }
 
-                            st.success("تم حفظ المادة بنجاح.")
-                            st.rerun()
+                academic_client.table(
+                    "academic_subjects"
+                ).insert(subject_payload).execute()
 
-                        except Exception as e:
-                            st.error("تعذر حفظ المادة.")
-                            st.caption(str(e)[:500])
+                st.success("تم حفظ المادة بنجاح.")
+                st.rerun()
+
+        except Exception as e:
+            st.error("تعذر حفظ المادة.")
+            st.caption(str(e)[:500])
+
 
             # -------------------------------------------------
             # 3) ربط مادة بشعبة
