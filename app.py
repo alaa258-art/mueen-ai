@@ -600,6 +600,7 @@ with st.expander("فتح إدارة الصفوف والشعب والمواد", e
                                     "created_by": academic_user_id,
                                 }
 
+                                
                                 academic_client.table(
                                     "section_subjects"
                                 ).insert(link_payload).execute()
@@ -615,6 +616,7 @@ with st.expander("فتح إدارة الصفوف والشعب والمواد", e
                             else:
                                 st.error("تعذر ربط المادة بالشعبة.")
                                 st.caption(str(e)[:500])
+
 
 
             # -------------------------------------------------
