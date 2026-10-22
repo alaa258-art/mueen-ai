@@ -639,6 +639,195 @@ if db_client:
                     hide_index=True,
                 )
 
+                st.divider()
+                st.markdown("## 🧠 لوحة التحليل الذكي للمهارات")
+
+                # 1. تحليل مستوى الإتقان لكل مهارة
+                analysis_df = filtered_df.copy()
+                analysis_df["mastery_pct"] = pd.to_numeric(
+                    analysis_df["mastery_pct"], errors="coerce"
+                )
+                analysis_df = analysis_df.dropna(
+                    subset=["skill", "mastery_pct"]
+                )
+
+                if analysis_df.empty:
+                    st.info("لا توجد بيانات كافية لتحليل المهارات.")
+                else:
+                    skill_analysis = (
+                        analysis_df.groupby("skill", as_index=False)
+                        .agg(
+                            متوسط_الإتقان=("mastery_pct", "mean"),
+                            عدد_السجلات=("mastery_pct", "count"),
+                        )
+                    )
+                    skill_analysis["متوسط_الإتقان"] = (
+                        skill_analysis["متوسط_الإتقان"].round(1)
+                    )
+                    skill_analysis["الفجوة عن الهدف"] = (
+                        float(threshold) - skill_analysis["متوسط_الإتقان"]
+                    ).round(1)
+
+                    skill_analysis["حالة الإتقان"] = skill_analysis[
+                        "متوسط_الإتقان"
+                    ].apply(
+                        lambda x: "تحتاج إلى دعم"
+                        if x < threshold else "بلغت حد الإتقان"
+                    )
+
+                    # 2. المهارات الأقل إتقانًا
+                    st.markdown("### 1️⃣ المهارات الأقل إتقانًا")
+                    weakest = skill_analysis.sort_values(
+                        "متوسط_الإتقان", ascending=True
+                    )
+                    st.dataframe(
+                        weakest.rename(columns={
+                            "skill": "المهارة",
+                            "متوسط_الإتقان": "متوسط الإتقان (%)",
+                            "عدد_السجلات": "عدد السجلات",
+                        }),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    # 3. المهارات التي تقل عن حد الإتقان
+                    st.markdown(
+                        f"### 2️⃣ المهارات الأقل من حد الإتقان ({threshold}%)"
+                    )
+                    below_target = skill_analysis[
+                        skill_analysis["متوسط_الإتقان"] < threshold
+                    ].copy()
+
+                    if below_target.empty:
+                        st.success("جميع المهارات المعروضة بلغت حد الإتقان المحدد.")
+                    else:
+                        st.dataframe(
+                            below_target.rename(columns={
+                                "skill": "المهارة",
+                                "متوسط_الإتقان": "متوسط الإتقان (%)",
+                                "عدد_السجلات": "عدد السجلات",
+                                "الفجوة عن الهدف": "الفجوة عن الهدف (نقطة)",
+                            })[
+                                [
+                                    "المهارة",
+                                    "متوسط الإتقان (%)",
+                                    "عدد السجلات",
+                                    "الفجوة عن الهدف (نقطة)",
+                                ]
+                            ],
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+                    # 4. تحليل التحسن حسب المهارة من المقارنات المتطابقة
+                    st.markdown("### 3️⃣ المهارات التي تحسنت بعد التدخل")
+                skill_change = pd.DataFrame(
+                    columns=["skill", "متوسط_التغير", "عدد_المقارنات"]
+                )
+                    # استخدام المقارنات المطابقة من لوحة مقارنة التحسن
+                    if "comparison" in locals() and not comparison.empty:
+                        skill_change = (
+                            comparison.groupby("skill", as_index=False)
+                            .agg(
+                                متوسط_التغير=("التغير (نقطة مئوية)", "mean"),
+                                عدد_المقارنات=("التغير (نقطة مئوية)", "count"),
+                            )
+                        )
+                        skill_change["متوسط_التغير"] = (
+                            skill_change["متوسط_التغير"].round(1)
+                        )
+
+                        skill_change["نتيجة التدخل"] = skill_change[
+                            "متوسط_التغير"
+                        ].apply(
+                            lambda x: "تحسن" if x > 0
+                            else "دون تغير" if x == 0
+                            else "تراجع"
+                        )
+
+                        st.dataframe(
+                            skill_change.rename(columns={
+                                "skill": "المهارة",
+                                "متوسط_التغير": "متوسط التغير (نقطة مئوية)",
+                                "عدد_المقارنات": "عدد المقارنات",
+                            }),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                    else:
+                        st.info(
+                            "لا توجد مقارنات قبلية وبعدية متطابقة كافية "
+                            "لتحديد المهارات التي تحسنت."
+                        )
+
+                    # 5. أولويات الخطط العلاجية
+                    st.markdown("### 4️⃣ المهارات ذات الأولوية العلاجية")
+
+                    priorities = below_target.copy()
+                    if not priorities.empty:
+                        priorities["الأولوية"] = priorities[
+                            "متوسط_الإتقان"
+                        ].apply(
+                            lambda x: "عاجلة" if x < threshold - 20
+                            else "مرتفعة" if x < threshold - 10
+                            else "متوسطة"
+                        )
+
+                        priorities["الإجراء المقترح"] = priorities[
+                            "الأولوية"
+                        ].map({
+                            "عاجلة": "إعادة تدريس المهارة وتقديم دعم مكثف",
+                            "مرتفعة": "تنفيذ نشاط علاجي موجه ثم إعادة التقييم",
+                            "متوسطة": "تدريب إضافي ومتابعة التقدم",
+                        })
+
+                        st.dataframe(
+                            priorities.rename(columns={
+                                "skill": "المهارة",
+                                "متوسط_الإتقان": "متوسط الإتقان (%)",
+                                "عدد_السجلات": "عدد السجلات",
+                            })[
+                                [
+                                    "المهارة",
+                                    "متوسط الإتقان (%)",
+                                    "الأولوية",
+                                    "الإجراء المقترح",
+                                ]
+                            ],
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                    else:
+                        st.success(
+                            "لا توجد مهارات دون حد الإتقان تحتاج إلى أولوية علاجية "
+                            "وفق البيانات والفلاتر الحالية."
+                        )
+
+                    # 6. تنزيل تقرير موحد
+                    report = skill_analysis.merge(
+                        skill_change[
+                            ["skill", "متوسط_التغير", "عدد_المقارنات"]
+                        ] if "comparison" in locals() and not comparison.empty
+                        else pd.DataFrame(columns=[
+                            "skill", "متوسط_التغير", "عدد_المقارنات"
+                        ]),
+                        on="skill",
+                        how="left",
+                    )
+
+                    st.download_button(
+                        "📥 تنزيل تقرير التحليل الذكي للمهارات CSV",
+                        report.to_csv(index=False).encode("utf-8-sig"),
+                        "mueen_smart_skill_analysis.csv",
+                        "text/csv",
+                        key="download_smart_skill_analysis",
+                    )
+
+                    st.caption(
+                        "تعتمد النتائج على السجلات والفلاتر الحالية. "
+                        "الأولوية المقترحة مساندة للمعلم وليست قرارًا آليًا نهائيًا."
+                    )
+
                 st.markdown("### 🧠 التحليل الذكي للتحصيل الدراسي")
                 st.caption("يُرسل إلى نموذج الذكاء الاصطناعي ملخص مجمّع حسب المهارة ونوع التقييم فقط، دون رموز الطلاب أو سجلاتهم الفردية.")
                 if not key:
