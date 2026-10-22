@@ -522,14 +522,14 @@ if subject_submit:
 
                     all_sections = sections_response.data or []
                     all_subjects = subjects_response.data or []
-st.write("فحص تحميل الشعب:", len(all_sections))
-st.write("فحص تحميل المواد:", len(all_subjects))
+                    st.write("فحص تحميل الشعب:", len(all_sections))
+                    st.write("فحص تحميل المواد:", len(all_subjects))
 
-if all_sections:
-    st.write("أول شعبة محمّلة:", all_sections[0])
+                    if all_sections:
+                        st.write("أول شعبة محمّلة:", all_sections[0])
 
-if all_subjects:
-    st.write("أول مادة محمّلة:", all_subjects[0])
+                    if all_subjects:
+                        st.write("أول مادة محمّلة:", all_subjects[0])
                     with st.form("mueen_link_section_subject"):
                         chosen_section = st.selectbox(
                             "الشعبة",
