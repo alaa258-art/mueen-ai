@@ -721,9 +721,7 @@ if db_client:
 
                     # 4. تحليل التحسن حسب المهارة من المقارنات المتطابقة
                     st.markdown("### 3️⃣ المهارات التي تحسنت بعد التدخل")
-                                skill_change = pd.DataFrame(
-                    columns=["skill", "متوسط_التغير", "عدد_المقارنات"]
-                )
+                                
 
                 if "comparison" in locals() and not comparison.empty:
                         skill_change = (
