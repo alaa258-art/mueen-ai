@@ -698,6 +698,7 @@ if db_client:
                         skill_analysis["متوسط_الإتقان"] < threshold
                     ].copy()
 
+                    
                     # 4. تحليل التحسن حسب المهارة من المقارنات المتطابقة
                     st.markdown("### 3️⃣ المهارات التي تحسنت بعد التدخل")
 
@@ -740,21 +741,12 @@ if db_client:
                             use_container_width=True,
                             hide_index=True,
                         )
-                   else:
+                    else:
                         st.info(
                             "لا توجد مقارنات قبلية وبعدية متطابقة "
                             "لتحديد المهارات التي تحسنت."
                         )
 
-                            }),
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-                   else:
-                        st.info(
-                            "لا توجد مقارنات قبلية وبعدية متطابقة كافية "
-                            "لتحديد المهارات التي تحسنت."
-                        )
 
                     # 5. أولويات الخطط العلاجية
                     st.markdown("### 4️⃣ المهارات ذات الأولوية العلاجية")
