@@ -321,6 +321,7 @@ st.markdown("## 🏫 إدارة الهيكل الأكاديمي")
 
 academic_role = st.session_state.get("mueen_school_role", "")
 academic_school_id = st.session_state.get("mueen_school_id")
+st.caption(f"فحص المدرسة المحددة: {academic_school_id}")
 academic_can_manage = academic_role in ("principal", "coordinator")
 
 with st.expander("فتح إدارة الصفوف والشعب والمواد", expanded=False):
