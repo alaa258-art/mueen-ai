@@ -740,7 +740,7 @@ if db_client:
                             use_container_width=True,
                             hide_index=True,
                         )
-                    else:
+                   else:
                         st.info(
                             "لا توجد مقارنات قبلية وبعدية متطابقة "
                             "لتحديد المهارات التي تحسنت."
@@ -750,7 +750,7 @@ if db_client:
                             use_container_width=True,
                             hide_index=True,
                         )
-                    else:
+                   else:
                         st.info(
                             "لا توجد مقارنات قبلية وبعدية متطابقة كافية "
                             "لتحديد المهارات التي تحسنت."
@@ -793,7 +793,7 @@ if db_client:
                             use_container_width=True,
                             hide_index=True,
                         )
-                    else:
+                   else:
                         st.success(
                             "لا توجد مهارات دون حد الإتقان تحتاج إلى أولوية علاجية "
                             "وفق البيانات والفلاتر الحالية."
