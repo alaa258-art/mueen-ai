@@ -574,33 +574,48 @@ with st.expander("فتح إدارة الصفوف والشعب والمواد", e
                             "أضف مادة للصف والمسار والسنة نفسها."
                         )
 
+                    
                     if link_submit and all_sections and compatible_subjects:
                         try:
-                            link_payload = {
-                                "school_id": academic_school_id,
-                                "section_id": chosen_section["id"],
-                                "subject_id": chosen_subject["id"],
-                                "grade_level": chosen_section["grade_level"],
-                                "track": chosen_section["track"],
-                                "created_by": academic_user_id,
-                            }
+                            existing_link = (
+                                academic_client.table("section_subjects")
+                                .select("section_id")
+                                .eq("school_id", academic_school_id)
+                                .eq("section_id", chosen_section["id"])
+                                .eq("subject_id", chosen_subject["id"])
+                                .execute()
+                            )
 
-                            academic_client.table(
-                                "section_subjects"
-                            ).insert(link_payload).execute()
+                            if existing_link.data:
+                                st.warning(
+                                    "هذه المادة مرتبطة بهذه الشعبة بالفعل."
+                                )
+                            else:
+                                link_payload = {
+                                    "school_id": academic_school_id,
+                                    "section_id": chosen_section["id"],
+                                    "subject_id": chosen_subject["id"],
+                                    "grade_level": chosen_section["grade_level"],
+                                    "track": chosen_section["track"],
+                                    "created_by": academic_user_id,
+                                }
 
-                            st.success("تم ربط المادة بالشعبة بنجاح.")
-                            st.rerun()
+                                academic_client.table(
+                                    "section_subjects"
+                                ).insert(link_payload).execute()
+
+                                st.success("تم ربط المادة بالشعبة بنجاح.")
+                                st.rerun()
 
                         except Exception as e:
-                            st.error(
-                                "تعذر الربط. قد يكون هذا الربط موجودًا مسبقًا."
-                            )
-                            st.caption(str(e)[:500])
+                            if getattr(e, "code", None) == "23505":
+                                st.warning(
+                                    "هذه المادة مرتبطة بهذه الشعبة بالفعل."
+                                )
+                            else:
+                                st.error("تعذر ربط المادة بالشعبة.")
+                                st.caption(str(e)[:500])
 
-                except Exception as e:
-                    st.error("تعذر تحميل بيانات الشعب والمواد.")
-                    st.caption(str(e)[:500])
 
             # -------------------------------------------------
             # 4) عرض الهيكل الأكاديمي
