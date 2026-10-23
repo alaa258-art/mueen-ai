@@ -866,15 +866,25 @@ if db_client:
                     .astype(str).str.strip().str.lower()
                 )
 
+                
+                # استبعاد السجلات غير المرتبطة بشعبة ومادة محددتين
+                comparison_source = comparison_source.dropna(
+                    subset=["section_id", "subject_id"]
+                ).copy()
+
                 baseline_rows = (
                     comparison_source[
                         comparison_source["type_norm"].isin(["baseline", "قبلي"])
                     ]
                     .sort_values("created_at")
                     .drop_duplicates(
-                        ["student_code", "skill"], keep="last"
+                        ["student_code", "skill", "section_id", "subject_id"],
+                        keep="last"
                     )
-                    [["student_code", "skill", "mastery_pct"]]
+                    [[
+                        "student_code", "skill", "section_id",
+                        "subject_id", "mastery_pct"
+                    ]]
                     .rename(columns={"mastery_pct": "القبلي (%)"})
                 )
 
@@ -886,15 +896,19 @@ if db_client:
                     ]
                     .sort_values("created_at")
                     .drop_duplicates(
-                        ["student_code", "skill"], keep="last"
+                        ["student_code", "skill", "section_id", "subject_id"],
+                        keep="last"
                     )
-                    [["student_code", "skill", "mastery_pct"]]
+                    [[
+                        "student_code", "skill", "section_id",
+                        "subject_id", "mastery_pct"
+                    ]]
                     .rename(columns={"mastery_pct": "البعدي (%)"})
                 )
 
                 comparison = baseline_rows.merge(
                     followup_rows,
-                    on=["student_code", "skill"],
+                    on=["student_code", "skill", "section_id", "subject_id"],
                     how="inner"
                 )
 
