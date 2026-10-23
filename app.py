@@ -1630,27 +1630,136 @@ if data is not None and not data.empty:
     st.markdown("### 2) تحليل المهارات وتحديد الأولوية")
     view=summary.rename(columns={"Skill":"المهارة","AverageMastery":"متوسط الإتقان (%)","Responses":"عدد الإجابات","Status":"الحالة"})
     st.dataframe(view,use_container_width=True,hide_index=True)
+    
     st.markdown("### 2.1) إعداد سجل المجموعة")
-    a1, a2, a3 = st.columns(3)
-    with a1: student_code = st.text_input("رمز الطالب/المجموعة (مجهول الهوية)", value="DEMO-GROUP", help="استخدم رمزًا مستعارًا، لا تكتب اسم الطالب.")
-    with a2: section = st.text_input("الشعبة", value="A")
-    with a3: db_grade = st.selectbox("الصف للحفظ", ["الخامس","السادس","السابع","الثامن","التاسع"], index=["الخامس","السادس","السابع","الثامن","التاسع"].index(grade))
-    if st.button("💾 حفظ نتائج التقييم القبلي في Supabase", use_container_width=True):
+
+    academic_client = get_supabase()
+    academic_school_id = get_selected_school_id()
+
+    if academic_client is None or not academic_school_id:
+        st.error("تعذر الاتصال بالمدرسة المحددة. سجّل الدخول مجددًا.")
+    else:
         try:
-            save_student(student_code.strip(), db_grade, section.strip())
-            records = [{
-                "student_code": student_code.strip(),
-                "skill": str(row["Skill"]),
-                "assessment_type": "baseline",
-                "score": float(row["AverageMastery"]),
-                "max_score": 100.0,
-                "recommendation": "متوسط الإتقان القبلي للمجموعة؛ الحالة: " + str(row["Status"])
-            } for _, row in summary.iterrows()]
-            save_assessment_records(records)
-            st.success(f"تم حفظ {len(records)} سجلًا قبليًا بنجاح.")
+            # تحميل الشعب التابعة للمدرسة المحددة
+            sections_response = (
+                academic_client.table("academic_sections")
+                .select(
+                    "id,grade_level,cycle,track,section_name,academic_year"
+                )
+                .eq("school_id", academic_school_id)
+                .order("grade_level")
+                .order("section_name")
+                .execute()
+            )
+            academic_sections = sections_response.data or []
+
+            if not academic_sections:
+                st.warning("لا توجد شعب مسجلة في الهيكل الأكاديمي لهذه المدرسة.")
+            else:
+                section_options = {}
+                for item in academic_sections:
+                    label = (
+                        f"الصف {item['grade_level']} - "
+                        f"الشعبة {item['section_name']} - "
+                        f"{item['academic_year']}"
+                    )
+                    section_options[label] = item
+
+                selected_section_label = st.selectbox(
+                    "الصف والشعبة",
+                    list(section_options.keys()),
+                    key="assessment_academic_section",
+                )
+                selected_section = section_options[selected_section_label]
+
+                # تحميل المواد المرتبطة بالشعبة المختارة فقط
+                links_response = (
+                    academic_client.table("section_subjects")
+                    .select("subject_id")
+                    .eq("school_id", academic_school_id)
+                    .eq("section_id", selected_section["id"])
+                    .execute()
+                )
+                linked_subject_ids = [
+                    item["subject_id"]
+                    for item in (links_response.data or [])
+                ]
+
+                linked_subjects = []
+                if linked_subject_ids:
+                    subjects_response = (
+                        academic_client.table("academic_subjects")
+                        .select(
+                            "id,subject_name,grade_level,track,academic_year"
+                        )
+                        .eq("school_id", academic_school_id)
+                        .eq("grade_level", selected_section["grade_level"])
+                        .eq("track", selected_section["track"])
+                        .eq("academic_year", selected_section["academic_year"])
+                        .execute()
+                    )
+                    linked_subjects = [
+                        subject
+                        for subject in (subjects_response.data or [])
+                        if subject["id"] in linked_subject_ids
+                    ]
+
+                if not linked_subjects:
+                    st.warning("لا توجد مواد مرتبطة بهذه الشعبة. أضف الربط من إدارة الهيكل الأكاديمي.")
+                else:
+                    subject_options = {
+                        subject["subject_name"]: subject
+                        for subject in linked_subjects
+                    }
+                    selected_subject_name = st.selectbox(
+                        "المادة",
+                        list(subject_options.keys()),
+                        key="assessment_academic_subject",
+                    )
+                    selected_subject = subject_options[selected_subject_name]
+
+                    student_code = st.text_input(
+                        "رمز الطالب/المجموعة (مجهول الهوية)",
+                        value="DEMO-GROUP",
+                        help="استخدم رمزًا مستعارًا، ولا تكتب اسم الطالب.",
+                    )
+
+                    if st.button(
+                        "💾 حفظ نتائج التقييم القبلي في Supabase",
+                        use_container_width=True,
+                    ):
+                        if not student_code.strip():
+                            st.error("أدخل رمزًا مجهول الهوية للطالب أو المجموعة.")
+                        else:
+                            save_student(
+                                student_code.strip(),
+                                str(selected_section["grade_level"]),
+                                str(selected_section["section_name"]),
+                            )
+
+                            records = [{
+                                "student_code": student_code.strip(),
+                                "skill": str(row["Skill"]),
+                                "assessment_type": "baseline",
+                                "score": float(row["AverageMastery"]),
+                                "max_score": 100.0,
+                                "recommendation": (
+                                    "متوسط الإتقان القبلي للمجموعة؛ الحالة: "
+                                    + str(row["Status"])
+                                ),
+                                "section_id": selected_section["id"],
+                                "subject_id": selected_subject["id"],
+                            } for _, row in summary.iterrows()]
+
+                            save_assessment_records(records)
+                            st.success(
+                                f"تم حفظ {len(records)} سجلًا قبليًا بنجاح."
+                            )
+
         except Exception as e:
-            st.error("تعذر حفظ النتائج. تأكد من إعداد Secrets وأسماء أعمدة الجداول.")
+            st.error("تعذر تحميل الهيكل الأكاديمي أو حفظ النتائج.")
             st.caption(str(e)[:500])
+
     weak=summary[summary["AverageMastery"]<threshold]["Skill"].tolist(); options=weak or summary["Skill"].tolist()
     skill=st.selectbox("اختر المهارة المستهدفة",options)
     mastery=float(summary.loc[summary["Skill"]==skill,"AverageMastery"].iloc[0])
