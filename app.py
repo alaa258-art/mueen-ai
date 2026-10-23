@@ -5,8 +5,6 @@ import html
 from openai import OpenAI
 from datetime import datetime
 from supabase import create_client
-
-
 st.markdown("""
 <style>
 /* الهوية البصرية لمنصة مُعين */
