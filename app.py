@@ -213,7 +213,7 @@ def load_all_history(limit=1000):
     school_id = get_selected_school_id()
     response = (
         client.table("assessment_records")
-        .select("student_code,skill,assessment_type,score,max_score,recommendation,created_at")
+                .select("student_code,skill,assessment_type,score,max_score,recommendation,created_at,section_id,subject_id")
         .eq("school_id", school_id)
         .order("created_at", desc=True)
         .limit(limit)
