@@ -1018,6 +1018,124 @@ if db_client:
                         "ولا تثبت وحدها أن التحسن ناتج عن التدخل العلاجي."
                     )
 
+                    st.markdown("### 🏫 تقرير التحسن حسب الشعبة والمادة")
+
+                    try:
+                        report_client = get_supabase()
+                        report_school_id = get_selected_school_id()
+
+                        if report_client is None or not report_school_id:
+                            st.warning("تعذر تحميل أسماء الشعب والمواد.")
+                        elif comparison.empty:
+                            st.info("لا توجد مقارنات متطابقة لإنشاء التقرير.")
+                        else:
+                            sections_response = (
+                                report_client.table("academic_sections")
+                                .select("id,grade_level,section_name,academic_year")
+                                .eq("school_id", report_school_id)
+                                .execute()
+                            )
+
+                            subjects_response = (
+                                report_client.table("academic_subjects")
+                                .select("id,subject_name,academic_year")
+                                .eq("school_id", report_school_id)
+                                .execute()
+                            )
+
+                            sections_df = pd.DataFrame(sections_response.data or [])
+                            subjects_df = pd.DataFrame(subjects_response.data or [])
+
+                            if sections_df.empty or subjects_df.empty:
+                                st.warning("لا توجد بيانات كافية لأسماء الشعب والمواد.")
+                            else:
+                                sections_df = sections_df.rename(
+                                    columns={
+                                        "id": "section_id",
+                                        "grade_level": "الصف",
+                                        "section_name": "الشعبة",
+                                        "academic_year": "السنة الدراسية",
+                                    }
+                                )
+
+                                subjects_df = subjects_df.rename(
+                                    columns={
+                                        "id": "subject_id",
+                                        "subject_name": "المادة",
+                                        "academic_year": "السنة الدراسية",
+                                    }
+                                )
+
+                                report_df = comparison.merge(
+                                    sections_df[
+                                        ["section_id", "الصف", "الشعبة", "السنة الدراسية"]
+                                    ],
+                                    on="section_id",
+                                    how="left"
+                                ).merge(
+                                    subjects_df[
+                                        ["subject_id", "المادة"]
+                                    ],
+                                    on="subject_id",
+                                    how="left"
+                                )
+
+                                report_df = report_df.dropna(
+                                    subset=["الصف", "الشعبة", "المادة"]
+                                )
+
+                                if report_df.empty:
+                                    st.info("لم يتم العثور على أسماء مطابقة للشعب والمواد.")
+                                else:
+                                    report_summary = (
+                                        report_df.groupby(
+                                            ["الصف", "الشعبة", "المادة"],
+                                            dropna=False
+                                        )
+                                        .agg(
+                                            عدد_المقارنات=("التغير (نقطة مئوية)", "count"),
+                                            متوسط_القبلي=("القبلي (%)", "mean"),
+                                            متوسط_البعدي=("البعدي (%)", "mean"),
+                                            متوسط_التغير=("التغير (نقطة مئوية)", "mean"),
+                                            حالات_التحسن=(
+                                                "التغير (نقطة مئوية)",
+                                                lambda values: int((values > 0).sum())
+                                            ),
+                                            حالات_التراجع=(
+                                                "التغير (نقطة مئوية)",
+                                                lambda values: int((values < 0).sum())
+                                            ),
+                                        )
+                                        .reset_index()
+                                    )
+
+                                    for column in [
+                                        "متوسط_القبلي",
+                                        "متوسط_البعدي",
+                                        "متوسط_التغير",
+                                    ]:
+                                        report_summary[column] = report_summary[column].round(1)
+
+                                    st.dataframe(
+                                        report_summary,
+                                        use_container_width=True,
+                                        hide_index=True
+                                    )
+
+                                    st.download_button(
+                                        "📥 تنزيل تقرير التحسن حسب الشعبة والمادة",
+                                        report_summary.to_csv(
+                                            index=False
+                                        ).encode("utf-8-sig"),
+                                        "mueen_section_subject_improvement.csv",
+                                        "text/csv",
+                                        key="download_section_subject_improvement"
+                                    )
+
+                    except Exception as e:
+                        st.error("تعذر إنشاء تقرير التحسن حسب الشعبة والمادة.")
+                        st.caption(str(e)[:500])
+
 
                 st.markdown("### 📊 مؤشرات الإتقان حسب المهارة")
                 skill_summary = (
