@@ -1806,18 +1806,22 @@ if data is not None and not data.empty:
         st.download_button("تنزيل سجل المتابعة CSV",pd.DataFrame([result]).to_csv(index=False).encode("utf-8-sig"),"mueen_followup_record.csv","text/csv")
         if st.button("☁️ حفظ التقييم البعدي والتوصية في Supabase", use_container_width=True):
             try:
+                
                 save_assessment_records([{
                     "student_code": student_code.strip(),
                     "skill": str(skill),
                     "assessment_type": "follow_up",
                     "score": float(result["AfterPct"]),
                     "max_score": 100.0,
-                    "recommendation": str(result["SuggestedNextStep"]) + f" | القبلي: {result['BeforePct']}% | التغير: {result['ChangePoints']:+.1f} نقطة"
+                    "recommendation": (
+                        str(result["SuggestedNextStep"])
+                        + f" | القبلي: {result['BeforePct']}%"
+                        + f" | التغير: {result['ChangePoints']:+.1f} نقطة"
+                    ),
+                    "section_id": selected_section["id"],
+                    "subject_id": selected_subject["id"],
                 }])
-                st.success("تم حفظ نتيجة التقييم البعدي والتوصية في قاعدة البيانات.")
-            except Exception as e:
-                st.error("تعذر حفظ النتيجة. تأكد من إعداد Secrets وصلاحية الاتصال.")
-                st.caption(str(e)[:500])
+
     st.markdown("### 6) سجل المتابعة المحفوظ")
     hist_code = st.text_input("رمز الطالب/المجموعة لعرض السجل", value=student_code, key="history_code")
     if st.button("عرض السجل من Supabase"):
