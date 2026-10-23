@@ -306,34 +306,153 @@ def decide(before, after, threshold):
     if delta>0: return "يوجد تحسن، لكن الإتقان المستهدف لم يتحقق بعد. يُقترح تدريب إضافي أو مثال جديد ثم إعادة التقييم.",delta
     return "لم يظهر تحسن في الدرجة المدخلة. راجع ملاءمة الأسئلة وطريقة التدريس، وجرّب نشاطًا بديلًا قبل إعادة التقييم.",delta
 
-# بوابة تسجيل الدخول إلى مُعين AI
+
+# بوابة تسجيل الدخول إلى مُعين AI - عربي / English
+if "mueen_language" not in st.session_state:
+    st.session_state["mueen_language"] = "العربية"
+
+language = st.session_state["mueen_language"]
+is_arabic = language == "العربية"
+
 if not st.session_state.get("mueen_access_token"):
-    st.title("🔐 تسجيل الدخول | MUEEN AI")
-    st.caption("سجّل الدخول بحسابك المعتمد للوصول إلى المنصة.")
+
+    # اختيار اللغة
+    _, language_col = st.columns([3, 1])
+    with language_col:
+        selected_language = st.selectbox(
+            "لغة الواجهة | Interface language",
+            ["العربية", "English"],
+            index=0 if is_arabic else 1,
+            key="mueen_login_language"
+        )
+
+    if selected_language != st.session_state["mueen_language"]:
+        st.session_state["mueen_language"] = selected_language
+        st.rerun()
+
+    language = st.session_state["mueen_language"]
+    is_arabic = language == "العربية"
+
+    # اتجاه الواجهة بحسب اللغة المختارة
+    direction = "rtl" if is_arabic else "ltr"
+    text_align = "right" if is_arabic else "left"
+
+    st.markdown(
+        f"""
+        <style>
+        .main {{
+            direction: {direction};
+        }}
+        .main h1, .main h2, .main h3,
+        .main p, .main label,
+        .main div[data-testid="stMarkdownContainer"] {{
+            text-align: {text_align};
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # شاشة الدخول
+    st.markdown(
+        f"""
+        <div style="
+            background: linear-gradient(135deg, #10243A, #087E8B);
+            padding: 28px 24px;
+            border-radius: 18px;
+            color: white;
+            text-align: center;
+            margin-bottom: 22px;
+        ">
+            <div style="font-size: 42px;">🎓</div>
+            <h1 style="color: white; text-align: center;">
+                MUEEN AI | مُعين
+            </h1>
+            <p style="color: white; text-align: center; font-size: 17px;">
+                {"مساعدك الذكي لتحسين نواتج التعلم"
+                 if is_arabic
+                 else "Your AI Assistant for Better Learning Outcomes"}
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.subheader(
+        "🔐 تسجيل الدخول" if is_arabic else "🔐 Sign In"
+    )
+    st.caption(
+        "سجّل الدخول بحسابك المعتمد للوصول إلى المنصة."
+        if is_arabic
+        else "Sign in with your authorized account to access the platform."
+    )
+
     auth_client = get_auth_client()
+
     if auth_client is None:
-        st.error("تعذر إعداد Supabase. تحقق من SUPABASE_URL وSUPABASE_PUBLISHABLE_KEY في Streamlit Secrets.")
+        st.error(
+            "تعذر إعداد Supabase. تحقق من إعدادات الاتصال في Streamlit Secrets."
+            if is_arabic
+            else "Supabase could not be initialized. Check your Streamlit Secrets."
+        )
         st.stop()
 
     with st.form("mueen_login_form"):
-        email = st.text_input("البريد الإلكتروني")
-        password = st.text_input("كلمة المرور", type="password")
-        submitted = st.form_submit_button("تسجيل الدخول", use_container_width=True)
+        email = st.text_input(
+            "البريد الإلكتروني" if is_arabic else "Email address"
+        )
+        password = st.text_input(
+            "كلمة المرور" if is_arabic else "Password",
+            type="password"
+        )
+        submitted = st.form_submit_button(
+            "تسجيل الدخول" if is_arabic else "Sign In",
+            use_container_width=True
+        )
 
     if submitted:
-        try:
-            result = auth_client.auth.sign_in_with_password({
-                "email": email.strip(),
-                "password": password,
-            })
-            if result.session:
-                st.session_state["mueen_access_token"] = result.session.access_token
-                st.session_state["mueen_refresh_token"] = result.session.refresh_token
-                st.rerun()
-            else:
-                st.error("لم يتم إنشاء جلسة تسجيل دخول.")
-        except Exception:
-            st.error("تعذر تسجيل الدخول. تحقق من بيانات الحساب وحالة حسابك في Supabase Auth.")
+        if not email.strip() or not password:
+            st.warning(
+                "يرجى إدخال البريد الإلكتروني وكلمة المرور."
+                if is_arabic
+                else "Please enter your email address and password."
+            )
+        else:
+            try:
+                result = auth_client.auth.sign_in_with_password({
+                    "email": email.strip(),
+                    "password": password,
+                })
+
+                if result.session:
+                    st.session_state["mueen_access_token"] = (
+                        result.session.access_token
+                    )
+                    st.session_state["mueen_refresh_token"] = (
+                        result.session.refresh_token
+                    )
+                    st.rerun()
+                else:
+                    st.error(
+                        "لم يتم إنشاء جلسة تسجيل دخول."
+                        if is_arabic
+                        else "A sign-in session could not be created."
+                    )
+
+            except Exception:
+                st.error(
+                    "تعذر تسجيل الدخول. تحقق من بيانات الحساب وحالة الحساب."
+                    if is_arabic
+                    else "Sign-in failed. Check your credentials and account status."
+                )
+
+    st.markdown("---")
+    st.caption(
+        "منصة مُعين للتعلم الذكي | نسخة تجريبية للمعلمين"
+        if is_arabic
+        else "MUEEN AI Learning Platform | Teacher Trial Version"
+    )
+
     st.stop()
 
 # تحقق من الجلسة قبل عرض أي بيانات
