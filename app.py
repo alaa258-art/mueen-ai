@@ -6,8 +6,89 @@ from openai import OpenAI
 from datetime import datetime
 from supabase import create_client
 
-st.set_page_config(page_title="MUEEN AI V3 | مُعين", page_icon="🎓", layout="wide")
-st.markdown("<style>.main{direction:rtl} h1,h2,h3,p,label,div[data-testid='stMarkdownContainer']{text-align:right}</style>", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+/* الهوية البصرية لمنصة مُعين */
+:root {
+    --mueen-navy: #10243A;
+    --mueen-teal: #087E8B;
+    --mueen-bg: #F3F6FA;
+    --mueen-gold: #D9A441;
+}
+
+/* خلفية التطبيق */
+.stApp {
+    background-color: var(--mueen-bg);
+}
+
+/* مساحة المحتوى */
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    max-width: 1440px;
+}
+
+/* العناوين */
+h1, h2, h3 {
+    color: var(--mueen-navy);
+    font-weight: 700;
+}
+
+/* الأزرار */
+.stButton > button,
+.stDownloadButton > button {
+    background-color: var(--mueen-teal);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0.55rem 1rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.stButton > button:hover,
+.stDownloadButton > button:hover {
+    background-color: var(--mueen-navy);
+    color: white;
+    border: none;
+}
+
+/* حقول الإدخال */
+.stTextInput input,
+.stNumberInput input,
+.stTextArea textarea {
+    border-radius: 8px;
+}
+
+/* القوائم المنسدلة */
+.stSelectbox > div > div {
+    border-radius: 8px;
+}
+
+/* البطاقات والتنبيهات */
+div[data-testid="stMetric"],
+div[data-testid="stAlert"] {
+    border-radius: 12px;
+}
+
+/* تنسيق العربية الافتراضي */
+.main {
+    direction: rtl;
+}
+
+h1, h2, h3, p, label,
+div[data-testid="stMarkdownContainer"] {
+    text-align: right;
+}
+
+/* انتقالات مريحة */
+button, input, textarea {
+    transition: border-color 0.2s ease;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 def get_key():
     try: return st.secrets.get("OPENAI_API_KEY", "")
