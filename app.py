@@ -1224,6 +1224,28 @@ if db_client:
                         int((comparison["التغير (نقطة مئوية)"] < 0).sum())
                     )
 
+                    st.markdown("#### 📊 توزيع حالات التحسن")
+
+                    status_counts = (
+                        comparison["حالة التحسن"]
+                        .value_counts()
+                        .reindex(
+                            ["تحسن", "دون تغير", "تراجع"],
+                            fill_value=0
+                        )
+                    )
+
+                    chart_df = status_counts.rename_axis(
+                        "حالة التحسن"
+                    ).reset_index(name="عدد الحالات")
+
+                    st.bar_chart(
+                        chart_df,
+                        x="حالة التحسن",
+                        y="عدد الحالات",
+                        use_container_width=True
+                    )
+
                     display_comparison = comparison.rename(
                         columns={
                             "student_code": "رمز الطالب/المجموعة",
