@@ -97,20 +97,22 @@ def ai(model, prompt):
     if not key: raise ValueError("لم يتم العثور على OPENAI_API_KEY في Streamlit Secrets.")
     return OpenAI(api_key=key).responses.create(model=model, input=prompt).output_text
 
-def create_plan(model, subject, grade, skill, mastery, language, notes, group):
-    prompt=f"""أنت وكيل دعم تعلم يساعد المعلم وليس بديلًا عنه. أنشئ خطة علاجية عملية باللغة {language}.
+
+def create_plan(model, subject, grade, skill, mastery, output_language, notes, group):
+    prompt = f"""أنت وكيل دعم تعلم يساعد المعلم وليس بديلًا عنه. أنشئ خطة علاجية عملية باللغة {output_language}.
 المادة: {subject}؛ الصف: {grade}؛ المهارة: {skill}؛ متوسط الإتقان: {mastery:.1f}%؛ الفئة: {group}؛ ملاحظات المعلم: {notes or 'لا توجد'}.
 نظّم الإجابة: 1) تفسير حذر للنتيجة دون افتراض أسباب غير مثبتة. 2) هدف قابل للقياس. 3) شرح مبسط. 4) مثال محلول. 5) نشاط علاجي 10 دقائق. 6) خمسة أسئلة متابعة مع الإجابات. 7) معيار إتقان مقترح 80% أو وفق إعداد المعلم. 8) بديل إذا لم يتحقق الإتقان. 9) الخطوة التالية بعد التقييم البعدي. لا تشخّص طبيًا أو نفسيًا، واجعل المعلم صاحب القرار."""
-    return ai(model,prompt)
-
-def create_quiz(model, subject, grade, skill, language):
-    prompt=f"أنشئ اختبار متابعة من 5 أسئلة للمهارة {skill} في مادة {subject} للصف {grade} باللغة {language}. نوّع بين الاختيار من متعدد والإجابة القصيرة. اعرض الأسئلة أولًا ثم مفتاح إجابة منفصل للمعلم، مع معيار تصحيح مختصر. لا تفترض معلومات عن طالب بعينه."
-    return ai(model,prompt)
+    return ai(model, prompt)
 
 
-def create_achievement_analysis(model, aggregate_json, threshold, language):
+def create_quiz(model, subject, grade, skill, output_language):
+    prompt = f"أنشئ اختبار متابعة من 5 أسئلة للمهارة {skill} في مادة {subject} للصف {grade} باللغة {output_language}. نوّع بين الاختيار من متعدد والإجابة القصيرة. اعرض الأسئلة أولًا ثم مفتاح إجابة منفصل للمعلم، مع معيار تصحيح مختصر. لا تفترض معلومات عن طالب بعينه."
+    return ai(model, prompt)
+
+
+def create_achievement_analysis(model, aggregate_json, threshold, output_language):
     """تحليل تعليمي من بيانات مجمعة فقط؛ لا ترسل رموز الطلاب أو سجلاتهم الفردية."""
-    prompt = f"""أنت محلل بيانات تعليمية مساعد للمعلم. حلل مؤشرات التحصيل التالية بحذر وباللغة {language}.
+    prompt = f"""أنت محلل بيانات تعليمية مساعد للمعلم. حلل مؤشرات التحصيل التالية بحذر وباللغة {output_language}.
 حد الإتقان المعتمد: {threshold}%.
 بيانات مجمعة حسب المهارة ونوع التقييم فقط (لا تحتوي على أسماء أو رموز طلاب):
 {aggregate_json}
@@ -124,6 +126,8 @@ def create_achievement_analysis(model, aggregate_json, threshold, language):
 7) إذا كانت البيانات قليلة أو غير كافية للمقارنة، صرّح بذلك بوضوح.
 استخدم العناوين: ملخص المؤشرات، نقاط القوة، أولويات الدعم، خطوات مقترحة، حدود التحليل."""
     return ai(model, prompt)
+
+    
 
 
 
@@ -1548,7 +1552,7 @@ if db_client:
                         aggregate_json = json.dumps(aggregate_for_ai.to_dict(orient="records"), ensure_ascii=False)
                         with st.spinner("يحلل مُعين المؤشرات المجمعة..."):
                             st.session_state["mueen_achievement_analysis"] = create_achievement_analysis(
-                                model, aggregate_json, threshold, language
+                                model, aggregate_json, threshold, output_language
                             )
                         st.session_state["mueen_achievement_analysis_scope"] = {
                             "school_id": get_selected_school_id(),
@@ -2105,7 +2109,7 @@ if data is not None and not data.empty:
     if st.button("✨ إنشاء خطة بالذكاء الاصطناعي",type="primary",use_container_width=True):
         try:
             with st.spinner("يُعد مُعين الخطة..."):
-                st.session_state["last_plan"]=create_plan(model,subject,grade,skill,mastery,language,notes,group)
+                st.session_state["last_plan"]=create_plan(model,subject,grade,skill,mastery,output_language,notes,group)
                 st.session_state["last_skill"]=skill
         except Exception as e:
             st.error("تعذر إنشاء الخطة. تحقق من المفتاح والفوترة وإتاحة النموذج."); st.code(str(e)[:1000])
@@ -2116,7 +2120,7 @@ if data is not None and not data.empty:
     if st.button("📝 إنشاء اختبار متابعة من 5 أسئلة",use_container_width=True):
         try:
             with st.spinner("يُنشئ مُعين الاختبار..."):
-                st.session_state["last_quiz"]=create_quiz(model,subject,grade,skill,language)
+                st.session_state["last_quiz"]=create_quiz(model,subject,grade,skill,output_language)
                 st.session_state["quiz_skill"]=skill
         except Exception as e:
             st.error("تعذر إنشاء الاختبار. تحقق من إعدادات API."); st.code(str(e)[:1000])
