@@ -930,8 +930,34 @@ else:
 if key: st.success("تم العثور على مفتاح API. لن نعرضه داخل التطبيق.")
 else: st.info("أضف OPENAI_API_KEY إلى Settings → Secrets في Streamlit لتفعيل ميزات الذكاء الاصطناعي.")
 
-st.markdown("## 📊 لوحة متابعة المعلم")
-st.caption("تعرض اللوحة السجلات المحفوظة في Supabase فقط، ولا تخلط بينها وبين البيانات النموذجية غير المحفوظة.")
+
+st.markdown("""
+<div style="
+    background: linear-gradient(120deg, #10243A 0%, #17465B 65%, #087E8B 100%);
+    padding: 24px 28px;
+    border-radius: 16px;
+    margin: 8px 0 20px 0;
+    color: white;
+    border: 1px solid rgba(255,255,255,0.12);
+">
+    <div style="font-size: 13px; color: #D9A441; font-weight: 700;
+                letter-spacing: 1px; margin-bottom: 8px;">
+        MUEEN AI | مُعين
+    </div>
+    <div style="font-size: 27px; font-weight: 800; margin-bottom: 8px;">
+        📊 لوحة القيادة التعليمية
+    </div>
+    <div style="font-size: 15px; color: #E4EDF4;">
+        متابعة التحصيل الدراسي، وقياس الإتقان، وتحديد أولويات الدعم التعليمي
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+st.caption(
+    "تعرض هذه اللوحة السجلات المحفوظة في Supabase للمدرسة النشطة فقط، "
+    "ولا تخلط بينها وبين البيانات النموذجية غير المحفوظة."
+)
+
 if db_client:
     if st.button("🔄 تحديث لوحة المتابعة", use_container_width=True):
         st.session_state["refresh_dashboard"] = datetime.now().isoformat()
