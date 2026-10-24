@@ -631,18 +631,60 @@ nav_items = [
     ("📄 التقرير التنفيذي", 4), ("📚 الخطط والاختبارات", 5),
     ("🏫 إدارة المدرسة", 6),
 ]
-st.markdown("""<div class="mueen-v5-title"><h2>✨ مساحة عمل مُعين</h2>
-<p>اختر القسم من البطاقات الملونة للانتقال مباشرة إلى أدواته.</p></div>""",
-unsafe_allow_html=True)
-for row_items in (nav_items[:3], nav_items[3:6], nav_items[6:]):
-    cols = st.columns(3)
-    for col, (label, number) in zip(cols, row_items):
+# V6: البطاقات الكبيرة للرئيسية فقط، والتنقل المختصر للصفحات الداخلية.
+active_page = st.session_state["mueen_active_page"]
+if active_page == 0:
+    st.markdown("""<div class="mueen-v5-title"><h2>✨ مساحة عمل مُعين</h2>
+    <p>اختر القسم من البطاقات الملونة للانتقال مباشرة إلى أدواته.</p></div>""",
+    unsafe_allow_html=True)
+    for row_items in (nav_items[:3], nav_items[3:6], nav_items[6:]):
+        cols = st.columns(3)
+        for col, (label, number) in zip(cols, row_items):
+            with col:
+                if st.button(label, key=f"mueen_nav_{number}", use_container_width=True):
+                    st.session_state["mueen_active_page"] = number
+                    st.rerun()
+    st.caption("🏠 الصفحة الرئيسية · اختر بطاقة للانتقال إلى القسم المطلوب")
+else:
+    st.markdown("""
+    <style>
+    /* أزرار التنقل المختصرة، دون تغيير ألوان البطاقات الرئيسية */
+    [class*="st-key-mueen_quick_"] button {
+        min-height: 38px !important;
+        padding: 5px 6px !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 9px !important;
+        background: #FFFFFF !important;
+        color: #10243A !important;
+        white-space: normal !important;
+    }
+    [class*="st-key-mueen_quick_"] button[kind="primary"] {
+        background: #087E8B !important;
+        border-color: #087E8B !important;
+        color: white !important;
+    }
+    [class*="st-key-mueen_quick_"] button:hover {
+        border-color: #087E8B !important;
+        color: #087E8B !important;
+        background: #EDF8F8 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    cols = st.columns(7, gap="small")
+    for col, (label, number) in zip(cols, nav_items):
         with col:
-            if st.button(label, key=f"mueen_nav_{number}", use_container_width=True):
+            if st.button(
+                label,
+                key=f"mueen_quick_{number}",
+                use_container_width=True,
+                type="primary" if number == active_page else "secondary",
+            ):
                 st.session_state["mueen_active_page"] = number
                 st.rerun()
+    st.caption("القسم الحالي: " + nav_items[active_page][0])
 
-st.caption("القسم الحالي: " + nav_items[st.session_state["mueen_active_page"]][0])
 with mueen_page(0):
     st.info("مرحبًا بك في مُعين. اختر إحدى البطاقات الملونة أعلاه لفتح القسم المطلوب.")
 
