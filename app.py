@@ -543,37 +543,37 @@ st.caption(
 # MUEEN AI Navigation V3 — بطاقات التبويب هي أزرار التنقل الحقيقية
 st.markdown("""
 <style>
-/* بطاقات التنقل قابلة للنقر: كل بطاقة تبويب Streamlit أصلي */
-div[data-testid="stTabs"] > div[data-baseweb="tab-list"] {
-    display: flex; flex-wrap: wrap; gap: 12px;
-    background: transparent; border: none; padding: 4px 0 10px;
+/* تستهدف عناصر التبويبات الفعلية في Streamlit بدلاً من data-baseweb على الزر */
+div[data-testid="stTabs"] [role="tablist"] {
+ display:flex !important; flex-wrap:wrap !important; gap:10px !important;
+ height:auto !important; overflow:visible !important; border:0 !important;
+ padding:6px 0 12px !important;
 }
-div[data-testid="stTabs"] button[data-baseweb="tab"] {
-    flex: 1 1 165px; min-height: 72px; white-space: normal;
-    border: 0; border-radius: 14px; padding: 12px 12px;
-    font-size: 16px; font-weight: 800; color: white;
-    box-shadow: 0 5px 16px rgba(16,36,58,.12);
-    transition: transform .18s ease, box-shadow .18s ease;
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"] {
+ flex:1 1 175px !important; min-height:76px !important; max-width:none !important;
+ white-space:normal !important; padding:14px 12px !important;
+ border-radius:14px !important; border:2px solid transparent !important;
+ color:#ffffff !important; font-size:17px !important; font-weight:800 !important;
+ box-shadow:0 5px 12px rgba(16,36,58,.13) !important;
 }
-div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 22px rgba(16,36,58,.20);
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"] p,
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"] span {
+ color:white !important; font-size:16px !important; font-weight:800 !important;
 }
-div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
-    outline: 4px solid #D9A441; outline-offset: -4px;
-    box-shadow: 0 8px 22px rgba(16,36,58,.23);
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(1) {background:#10243A !important;}
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(2) {background:#087E8B !important;}
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(3) {background:#2463A0 !important;}
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(4) {background:#7553A6 !important;}
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(5) {background:#A66A27 !important;}
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(6) {background:#20806A !important;}
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(7) {background:#B45366 !important;}
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"][aria-selected="true"] {
+ border-color:#D9A441 !important; box-shadow:0 0 0 2px #D9A441 !important;
 }
-div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(1) { background: #10243A; }
-div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(2) { background: #087E8B; }
-div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(3) { background: #2463A0; }
-div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(4) { background: #7553A6; }
-div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(5) { background: #A66A27; }
-div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(6) { background: #20806A; }
-div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(7) { background: #B45366; }
-div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {display:none;}
+div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {display:none !important;}
 .mueen-home-hero {
     background:linear-gradient(120deg,#10243A,#087E8B);
-    border-radius:16px; padding:16px 22px; color:white; margin:6px 0 10px;
+    border-radius:14px; padding:10px 18px; color:white; margin:4px 0 8px;
     border-bottom:5px solid #D9A441;
 }
 .mueen-home-hero h2 {color:white; margin:0 0 10px;}
@@ -595,9 +595,9 @@ mueen_tabs = st.tabs([
 with mueen_tabs[0]:
     st.markdown("""
     <div class="mueen-home-hero">
-      <h2>✨ مرحبًا بك في مساحة عمل مُعين</h2>
-      <p>ست بطاقات ملونة بالأعلى تفتح أدوات القيادة والتحسن والتحليل والتقارير والخطط وإدارة المدرسة.</p>
-      <p>📌 اختر القسم مباشرة، ثم عد إلى «الرئيسية» متى شئت.</p>
+      <h2>✨ اختر وجهتك في مُعين</h2>
+      <p>اختر إحدى البطاقات الملونة بالأعلى للانتقال إلى أدواتها.</p>
+      
     </div>
     """, unsafe_allow_html=True)
 with mueen_tabs[6]:
@@ -1003,8 +1003,8 @@ if db_client:
     st.sidebar.success("قاعدة بيانات Supabase متصلة")
 else:
     st.sidebar.warning("تعذر الاتصال بقاعدة البيانات عبر جلسة المستخدم. تحقق من SUPABASE_URL وSUPABASE_PUBLISHABLE_KEY.")
-if key: st.success("تم العثور على مفتاح API. لن نعرضه داخل التطبيق.")
-else: st.info("أضف OPENAI_API_KEY إلى Settings → Secrets في Streamlit لتفعيل ميزات الذكاء الاصطناعي.")
+if key: st.sidebar.success("ميزات الذكاء الاصطناعي جاهزة")
+else: st.sidebar.info("أضف OPENAI_API_KEY إلى Streamlit Secrets لتفعيل الذكاء الاصطناعي.")
 
 
 with mueen_tabs[1]:
