@@ -366,26 +366,55 @@ if not st.session_state.get("mueen_access_token"):
         unsafe_allow_html=True
     )
 
-    # شاشة الدخول
+    # تصميم تسجيل الدخول فقط — لا يؤثر على الصفحات بعد تسجيل الدخول
+    st.markdown("""
+    <style>
+    .block-container {padding-top: 3.6rem !important; max-width: 1080px !important;}
+    .mueen-login-hero {
+        background: linear-gradient(120deg,#10243A 0%,#17465B 52%,#087E8B 100%);
+        border-radius: 18px; padding: 24px 26px; margin: 6px 0 20px;
+        border-bottom: 4px solid #D9A441; text-align: center;
+        box-shadow: 0 8px 24px rgba(16,36,58,.12);
+    }
+    .mueen-login-hero h1 {color: #fff !important; margin: 4px 0 !important;
+        font-size: clamp(26px,3vw,36px) !important; text-align:center !important;}
+    .mueen-login-hero p {color: #E8F4F5 !important; margin: 4px 0;
+        text-align:center !important; font-size:15px;}
+    .mueen-login-hero .icon {font-size: 32px;}
+    div[data-testid="stForm"] {
+        background: #FFFFFF !important; border: 1px solid #D8E3EB !important;
+        border-radius: 16px !important; padding: 22px !important;
+        box-shadow: 0 8px 24px rgba(16,36,58,.07);
+    }
+    div[data-testid="stForm"] div[data-testid="stTextInput"] input {
+        background-color: #FFFFFF !important; color: #10243A !important;
+        -webkit-text-fill-color: #10243A !important;
+        border: 1px solid #AABBC9 !important; border-radius: 10px !important;
+        min-height: 46px !important; font-size: 16px !important;
+    }
+    div[data-testid="stForm"] div[data-testid="stTextInput"] input:focus {
+        border: 2px solid #087E8B !important;
+        box-shadow: 0 0 0 3px rgba(8,126,139,.14) !important;
+    }
+    div[data-testid="stForm"] div[data-testid="stTextInput"] label {
+        color: #10243A !important; font-weight: 700 !important;
+    }
+    div[data-testid="stForm"] button[kind="secondaryFormSubmit"],
+    div[data-testid="stForm"] button[kind="primaryFormSubmit"],
+    div[data-testid="stForm"] button[data-testid="stFormSubmitButton"] {
+        background: #087E8B !important; color: #fff !important;
+        border-radius: 10px !important; min-height: 45px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # شاشة دخول مختصرة بهوية مُعين
     st.markdown(
         f"""
-        <div style="
-            background: linear-gradient(135deg, #10243A, #087E8B);
-            padding: 28px 24px;
-            border-radius: 18px;
-            color: white;
-            text-align: center;
-            margin-bottom: 22px;
-        ">
-            <div style="font-size: 42px;">🎓</div>
-            <h1 style="color: white; text-align: center;">
-                MUEEN AI | مُعين
-            </h1>
-            <p style="color: white; text-align: center; font-size: 17px;">
-                {"مساعدك الذكي لتحسين نواتج التعلم"
-                 if is_arabic
-                 else "Your AI Assistant for Better Learning Outcomes"}
-            </p>
+        <div class="mueen-login-hero">
+            <div class="icon">🎓</div>
+            <h1>مُعين | MUEEN AI</h1>
+            <p>{"مساعدك الذكي لتحسين نواتج التعلم" if is_arabic else "Your AI Assistant for Better Learning Outcomes"}</p>
         </div>
         """,
         unsafe_allow_html=True
