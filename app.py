@@ -540,67 +540,82 @@ st.caption(
     "وراجع نتائج الذكاء الاصطناعي قبل تطبيقها."
 )
 
-# MUEEN AI Navigation V3 — بطاقات التبويب هي أزرار التنقل الحقيقية
+# MUEEN AI V5 — أزرار تنقل حقيقية (لا تعتمد على تنسيق التبويبات)
+from contextlib import contextmanager
+
+@contextmanager
+def mueen_page(page_number):
+    """إبقاء الحسابات المشتركة دون تغيير، مع إخفاء محتوى الصفحات الأخرى."""
+    if st.session_state.get("mueen_active_page", 0) == page_number:
+        with st.container():
+            yield
+    else:
+        hidden_area = st.empty()
+        try:
+            with hidden_area.container():
+                yield
+        finally:
+            hidden_area.empty()
+
 st.markdown("""
 <style>
-/* تستهدف عناصر التبويبات الفعلية في Streamlit بدلاً من data-baseweb على الزر */
-div[data-testid="stTabs"] [role="tablist"] {
- display:flex !important; flex-wrap:wrap !important; gap:10px !important;
- height:auto !important; overflow:visible !important; border:0 !important;
- padding:6px 0 12px !important;
+.mueen-v5-title {
+ background:linear-gradient(110deg,#10243A,#087E8B);
+ color:white;border-radius:14px;padding:13px 20px;
+ border-bottom:4px solid #D9A441;margin:0 0 10px;
 }
-div[data-testid="stTabs"] [role="tablist"] button[role="tab"] {
- flex:1 1 175px !important; min-height:76px !important; max-width:none !important;
- white-space:normal !important; padding:14px 12px !important;
- border-radius:14px !important; border:2px solid transparent !important;
- color:#ffffff !important; font-size:17px !important; font-weight:800 !important;
- box-shadow:0 5px 12px rgba(16,36,58,.13) !important;
+.mueen-v5-title h2{color:white;margin:0;font-size:23px}
+.mueen-v5-title p{color:#E7F4F5;margin:3px 0 0;font-size:14px}
+/* الأزرار الفعلية في صفوف التنقل فقط */
+div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_0 button,
+div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_1 button,
+div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_2 button,
+div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_3 button,
+div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_4 button,
+div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_5 button,
+div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_6 button {
+ min-height:74px!important;white-space:normal!important;
+ border-radius:14px!important;font-size:16px!important;
+ font-weight:800!important;color:white!important;
+ box-shadow:0 4px 12px rgba(16,36,58,.12)!important;
 }
-div[data-testid="stTabs"] [role="tablist"] button[role="tab"] p,
-div[data-testid="stTabs"] [role="tablist"] button[role="tab"] span {
- color:white !important; font-size:16px !important; font-weight:800 !important;
-}
-div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(1) {background:#10243A !important;}
-div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(2) {background:#087E8B !important;}
-div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(3) {background:#2463A0 !important;}
-div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(4) {background:#7553A6 !important;}
-div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(5) {background:#A66A27 !important;}
-div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(6) {background:#20806A !important;}
-div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:nth-of-type(7) {background:#B45366 !important;}
-div[data-testid="stTabs"] [role="tablist"] button[role="tab"][aria-selected="true"] {
- border-color:#D9A441 !important; box-shadow:0 0 0 2px #D9A441 !important;
-}
-div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {display:none !important;}
-.mueen-home-hero {
-    background:linear-gradient(120deg,#10243A,#087E8B);
-    border-radius:14px; padding:10px 18px; color:white; margin:4px 0 8px;
-    border-bottom:5px solid #D9A441;
-}
-.mueen-home-hero h2 {color:white; margin:0 0 10px;}
-.mueen-home-hero p {color:#E7F4F5; font-size:17px;}
-.mueen-home-card {
-    padding:20px; border-radius:16px; background:white;
-    border:1px solid #DCE5EB; border-top:5px solid #087E8B;
-    min-height:122px; box-shadow:0 3px 12px rgba(16,36,58,.06);
-}
-.mueen-home-card h3 {margin:0 0 8px; font-size:19px;}
-.mueen-home-card p {margin:0; color:#526174;}
+.st-key-mueen_nav_0 button {background:#10243A!important}
+.st-key-mueen_nav_1 button {background:#087E8B!important}
+.st-key-mueen_nav_2 button {background:#2463A0!important}
+.st-key-mueen_nav_3 button {background:#7553A6!important}
+.st-key-mueen_nav_4 button {background:#A66A27!important}
+.st-key-mueen_nav_5 button {background:#20806A!important}
+.st-key-mueen_nav_6 button {background:#B45366!important}
+.st-key-mueen_nav_0 button:hover,.st-key-mueen_nav_1 button:hover,
+.st-key-mueen_nav_2 button:hover,.st-key-mueen_nav_3 button:hover,
+.st-key-mueen_nav_4 button:hover,.st-key-mueen_nav_5 button:hover,
+.st-key-mueen_nav_6 button:hover {filter:brightness(1.15);transform:translateY(-2px)}
 </style>
 """, unsafe_allow_html=True)
-st.caption("🧭 اختر البطاقة الملونة لفتح القسم المطلوب. تبويب «الرئيسية» يعيدك إلى هذه الشاشة.")
-mueen_tabs = st.tabs([
-    "🏠 الرئيسية", "📊 لوحة القيادة", "📈 التحسن والمهارات", "🧠 التحليل الذكي",
-    "📄 التقرير التنفيذي", "📚 الخطط والاختبارات", "🏫 إدارة المدرسة",
-])
-with mueen_tabs[0]:
-    st.markdown("""
-    <div class="mueen-home-hero">
-      <h2>✨ اختر وجهتك في مُعين</h2>
-      <p>اختر إحدى البطاقات الملونة بالأعلى للانتقال إلى أدواتها.</p>
-      
-    </div>
-    """, unsafe_allow_html=True)
-with mueen_tabs[6]:
+
+st.session_state.setdefault("mueen_active_page", 0)
+nav_items = [
+    ("🏠 الرئيسية", 0), ("📊 لوحة القيادة", 1),
+    ("📈 التحسن والمهارات", 2), ("🧠 التحليل الذكي", 3),
+    ("📄 التقرير التنفيذي", 4), ("📚 الخطط والاختبارات", 5),
+    ("🏫 إدارة المدرسة", 6),
+]
+st.markdown("""<div class="mueen-v5-title"><h2>✨ مساحة عمل مُعين</h2>
+<p>اختر القسم من البطاقات الملونة للانتقال مباشرة إلى أدواته.</p></div>""",
+unsafe_allow_html=True)
+for row_items in (nav_items[:3], nav_items[3:6], nav_items[6:]):
+    cols = st.columns(3)
+    for col, (label, number) in zip(cols, row_items):
+        with col:
+            if st.button(label, key=f"mueen_nav_{number}", use_container_width=True):
+                st.session_state["mueen_active_page"] = number
+                st.rerun()
+
+st.caption("القسم الحالي: " + nav_items[st.session_state["mueen_active_page"]][0])
+with mueen_page(0):
+    st.info("مرحبًا بك في مُعين. اختر إحدى البطاقات الملونة أعلاه لفتح القسم المطلوب.")
+
+with mueen_page(6):
     # =========================================================
     # إدارة الهيكل الأكاديمي - MUEEN AI
     # =========================================================
@@ -1007,7 +1022,7 @@ if key: st.sidebar.success("ميزات الذكاء الاصطناعي جاهز�
 else: st.sidebar.info("أضف OPENAI_API_KEY إلى Streamlit Secrets لتفعيل الذكاء الاصطناعي.")
 
 
-with mueen_tabs[1]:
+with mueen_page(1):
     st.markdown("""
     <div style="
         background: linear-gradient(120deg, #10243A 0%, #17465B 65%, #087E8B 100%);
@@ -1057,7 +1072,7 @@ if db_client:
             # Filters apply only to the already school-scoped data returned by load_all_history.
            
 
-            with mueen_tabs[1]:
+            with mueen_page(1):
                 st.markdown("### 🔎 تصفية التقارير")
 
                 # فلتر الفترة الزمنية
@@ -1198,7 +1213,7 @@ if db_client:
                             "لذلك لا يُعد الفرق بينهما مقياسًا مؤكدًا للتحسن الفردي."
                         )
 
-                with mueen_tabs[2]:
+                with mueen_page(2):
                     st.markdown("### 📈 مقارنة التحسن الفعلي بين القبلي والبعدي")
 
 
@@ -1514,7 +1529,7 @@ if db_client:
                             st.caption(str(e)[:500])
 
 
-                with mueen_tabs[2]:
+                with mueen_page(2):
                     st.markdown("### 📊 مؤشرات الإتقان حسب المهارة")
                     skill_summary = (
                         filtered_df.groupby(["skill", "assessment_type"], as_index=False)
@@ -1535,7 +1550,7 @@ if db_client:
                         hide_index=True,
                     )
 
-                with mueen_tabs[3]:
+                with mueen_page(3):
                     st.divider()
                     st.markdown("## 🧠 لوحة التحليل الذكي للمهارات")
 
@@ -1780,7 +1795,7 @@ if db_client:
                         )
                     st.caption("راجع الاستنتاجات والتوصيات قبل تطبيقها؛ التحليل الذكي مساعد للمعلم وليس حكمًا نهائيًا على أداء الطلاب.")
 
-                with mueen_tabs[2]:
+                with mueen_page(2):
                     if not baseline.empty and not followup.empty:
                         st.markdown("### 📈 مؤشرات التحسن: التقييم القبلي والبعدي")
 
@@ -1908,7 +1923,7 @@ if db_client:
                             "ضمن الفلاتر الحالية."
                         )
 
-                with mueen_tabs[4]:
+                with mueen_page(4):
                     # التقرير التنفيذي الذكي لمدير المدرسة
                     st.markdown("## 🏫 التقرير التنفيذي الذكي لمدير المدرسة")
                     st.caption(
@@ -2353,7 +2368,7 @@ if db_client:
                                 "وحفظ بصيغة PDF."
                             )
 
-                with mueen_tabs[1]:
+                with mueen_page(1):
                     st.markdown("### 🗂️ أحدث السجلات المحفوظة")
                     display_cols = [
                         c for c in [
@@ -2391,7 +2406,7 @@ if db_client:
 else:
     st.info("فعّل اتصال Supabase لعرض لوحة المتابعة المحفوظة.")
 
-with mueen_tabs[5]:
+with mueen_page(5):
     demo=pd.DataFrame([
      {"Student":"طالب 1","Skill":"فهم مفهوم الخوارزمية","Score":4,"MaxScore":5},
      {"Student":"طالب 1","Skill":"ترتيب خطوات الحل","Score":2,"MaxScore":5},
