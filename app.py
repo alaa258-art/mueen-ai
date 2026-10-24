@@ -901,7 +901,12 @@ with st.sidebar:
     subject=st.selectbox("المادة",["الحوسبة","الرياضيات","العلوم","اللغة العربية","اللغة الإنجليزية"])
     grade=st.selectbox("الصف",["الخامس","السادس","السابع","الثامن","التاسع"])
     threshold=st.slider("حد الإتقان (%)",50,100,80,5)
-    language=st.selectbox("لغة المخرجات",["العربية","English"])
+    output_language = st.selectbox(
+    "لغة المخرجات" if st.session_state.get("mueen_language", "العربية") == "العربية"
+    else "Output Language",
+    ["العربية", "English"],
+    key="mueen_output_language"
+)
     model=st.text_input("اسم نموذج API",value="gpt-4.1-mini")
 key=get_key()
 db_client=get_supabase()
