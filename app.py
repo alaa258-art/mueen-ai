@@ -525,35 +525,86 @@ st.caption("تحليل المهارات • خطط علاجية • اختبار
 st.info("هذه نسخة تجريبية للمعلم. استخدم رموزًا تعليمية مستعارة بدل أسماء الطلاب، ولا تضع بيانات شخصية حساسة.")
 st.warning("استخدم بيانات تجريبية أو مجهولة الهوية فقط، وراجع المخرجات قبل استخدامها مع الطلاب.")
 
-# تنقل مُعين الاحترافي — تبويبات مستقلة بصريًا مع إبقاء الحسابات المشتركة
+# MUEEN AI Navigation V2 — واجهة رئيسية وبطاقات تنقل بصرية
 st.markdown("""
 <style>
-/* تصميم شريط التنقل الرئيسي */
+/* بطاقات التنقل قابلة للنقر: كل بطاقة تبويب Streamlit أصلي */
 div[data-testid="stTabs"] > div[data-baseweb="tab-list"] {
-    gap: 8px; flex-wrap: wrap; background: #E8F0F4;
-    padding: 12px; border-radius: 16px;
-    border: 1px solid #D9E5EB;
+    display: flex; flex-wrap: wrap; gap: 12px;
+    background: transparent; border: none; padding: 10px 0 18px;
 }
 div[data-testid="stTabs"] button[data-baseweb="tab"] {
-    background: #FFFFFF; border: 1px solid #D7E2EB;
-    border-radius: 12px; padding: 12px 15px;
-    font-weight: 700; color: #10243A;
-    box-shadow: 0 2px 5px rgba(16,36,58,.06);
+    flex: 1 1 190px; min-height: 84px; white-space: normal;
+    border: 0; border-radius: 16px; padding: 17px 15px;
+    font-size: 17px; font-weight: 800; color: white;
+    box-shadow: 0 5px 16px rgba(16,36,58,.12);
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 22px rgba(16,36,58,.20);
 }
 div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
-    background: linear-gradient(120deg,#10243A,#087E8B);
-    color: white; border-color: #087E8B;
+    outline: 4px solid #D9A441; outline-offset: -4px;
+    box-shadow: 0 8px 22px rgba(16,36,58,.23);
 }
+div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(1) { background: #10243A; }
+div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(2) { background: #087E8B; }
+div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(3) { background: #2463A0; }
+div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(4) { background: #7553A6; }
+div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(5) { background: #A66A27; }
+div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(6) { background: #20806A; }
+div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(7) { background: #B45366; }
 div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {display:none;}
+.mueen-home-hero {
+    background:linear-gradient(120deg,#10243A,#087E8B);
+    border-radius:20px; padding:30px; color:white; margin:12px 0 22px;
+    border-bottom:5px solid #D9A441;
+}
+.mueen-home-hero h2 {color:white; margin:0 0 10px;}
+.mueen-home-hero p {color:#E7F4F5; font-size:17px;}
+.mueen-home-card {
+    padding:20px; border-radius:16px; background:white;
+    border:1px solid #DCE5EB; border-top:5px solid #087E8B;
+    min-height:122px; box-shadow:0 3px 12px rgba(16,36,58,.06);
+}
+.mueen-home-card h3 {margin:0 0 8px; font-size:19px;}
+.mueen-home-card p {margin:0; color:#526174;}
 </style>
 """, unsafe_allow_html=True)
 st.markdown("### 🧭 مساحة العمل التعليمية")
-st.caption("اختر القسم الذي تريد العمل فيه من القائمة التالية. تظهر أدوات القسم المحدد فقط.")
+st.caption("اضغط على بطاقة القسم في شريط التنقل لعرض أدواته فقط. اختر الرئيسية للعودة إلى شاشة الترحيب.")
 mueen_tabs = st.tabs([
-    "🏠 لوحة القيادة", "📈 التحسن والمهارات", "🧠 التحليل الذكي",
+    "🏠 الرئيسية", "📊 لوحة القيادة", "📈 التحسن والمهارات", "🧠 التحليل الذكي",
     "📄 التقرير التنفيذي", "📚 الخطط والاختبارات", "🏫 إدارة المدرسة",
 ])
-with mueen_tabs[5]:
+with mueen_tabs[0]:
+    st.markdown("""
+    <div class="mueen-home-hero">
+      <h2>🎓 مرحبًا بك في مُعين | MUEEN AI</h2>
+      <p>منصة دعم التعلم الذكي — مساحة عمل واحدة لاتخاذ قرارات تعليمية مبنية على البيانات.</p>
+      <p>👆 اختر إحدى بطاقات التنقل الملونة بالأعلى لفتح القسم المطلوب.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    home_cards = [
+        ("📊 لوحة القيادة", "المؤشرات والسجلات والفلاتر", "#087E8B"),
+        ("📈 التحسن والمهارات", "الرسوم البيانية ومقارنة النتائج", "#2463A0"),
+        ("🧠 التحليل الذكي", "تحليل الإتقان والتوصيات", "#7553A6"),
+        ("📄 التقرير التنفيذي", "التقرير الإداري والطباعة PDF", "#A66A27"),
+        ("📚 الخطط والاختبارات", "الخطط العلاجية واختبارات المتابعة", "#20806A"),
+        ("🏫 إدارة المدرسة", "الصفوف والشعب والمواد", "#B45366"),
+    ]
+    for offset in (0, 3):
+        cols = st.columns(3)
+        for col, (label, description, color) in zip(cols, home_cards[offset:offset+3]):
+            with col:
+                st.markdown(
+                    f'<div class="mueen-home-card" style="border-top-color:{color}">'
+                    f'<h3>{label}</h3><p>{description}</p></div>',
+                    unsafe_allow_html=True,
+                )
+    st.info("للتنقل، استخدم البطاقات الملونة أعلى الصفحة. هذه البطاقات التعريفية تلخص وظائف الأقسام.")
+with mueen_tabs[6]:
     # =========================================================
     # إدارة الهيكل الأكاديمي - MUEEN AI
     # =========================================================
@@ -960,7 +1011,7 @@ if key: st.success("تم العثور على مفتاح API. لن نعرضه د�
 else: st.info("أضف OPENAI_API_KEY إلى Settings → Secrets في Streamlit لتفعيل ميزات الذكاء الاصطناعي.")
 
 
-with mueen_tabs[0]:
+with mueen_tabs[1]:
     st.markdown("""
     <div style="
         background: linear-gradient(120deg, #10243A 0%, #17465B 65%, #087E8B 100%);
@@ -1010,7 +1061,7 @@ if db_client:
             # Filters apply only to the already school-scoped data returned by load_all_history.
            
 
-            with mueen_tabs[0]:
+            with mueen_tabs[1]:
                 st.markdown("### 🔎 تصفية التقارير")
 
                 # فلتر الفترة الزمنية
@@ -1151,7 +1202,7 @@ if db_client:
                             "لذلك لا يُعد الفرق بينهما مقياسًا مؤكدًا للتحسن الفردي."
                         )
 
-                with mueen_tabs[1]:
+                with mueen_tabs[2]:
                     st.markdown("### 📈 مقارنة التحسن الفعلي بين القبلي والبعدي")
 
 
@@ -1467,7 +1518,7 @@ if db_client:
                             st.caption(str(e)[:500])
 
 
-                with mueen_tabs[1]:
+                with mueen_tabs[2]:
                     st.markdown("### 📊 مؤشرات الإتقان حسب المهارة")
                     skill_summary = (
                         filtered_df.groupby(["skill", "assessment_type"], as_index=False)
@@ -1488,7 +1539,7 @@ if db_client:
                         hide_index=True,
                     )
 
-                with mueen_tabs[2]:
+                with mueen_tabs[3]:
                     st.divider()
                     st.markdown("## 🧠 لوحة التحليل الذكي للمهارات")
 
@@ -1733,7 +1784,7 @@ if db_client:
                         )
                     st.caption("راجع الاستنتاجات والتوصيات قبل تطبيقها؛ التحليل الذكي مساعد للمعلم وليس حكمًا نهائيًا على أداء الطلاب.")
 
-                with mueen_tabs[1]:
+                with mueen_tabs[2]:
                     if not baseline.empty and not followup.empty:
                         st.markdown("### 📈 مؤشرات التحسن: التقييم القبلي والبعدي")
 
@@ -1861,7 +1912,7 @@ if db_client:
                             "ضمن الفلاتر الحالية."
                         )
 
-                with mueen_tabs[3]:
+                with mueen_tabs[4]:
                     # التقرير التنفيذي الذكي لمدير المدرسة
                     st.markdown("## 🏫 التقرير التنفيذي الذكي لمدير المدرسة")
                     st.caption(
@@ -2306,7 +2357,7 @@ if db_client:
                                 "وحفظ بصيغة PDF."
                             )
 
-                with mueen_tabs[0]:
+                with mueen_tabs[1]:
                     st.markdown("### 🗂️ أحدث السجلات المحفوظة")
                     display_cols = [
                         c for c in [
@@ -2344,7 +2395,7 @@ if db_client:
 else:
     st.info("فعّل اتصال Supabase لعرض لوحة المتابعة المحفوظة.")
 
-with mueen_tabs[4]:
+with mueen_tabs[5]:
     demo=pd.DataFrame([
      {"Student":"طالب 1","Skill":"فهم مفهوم الخوارزمية","Score":4,"MaxScore":5},
      {"Student":"طالب 1","Skill":"ترتيب خطوات الحل","Score":2,"MaxScore":5},
