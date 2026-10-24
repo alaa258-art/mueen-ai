@@ -500,8 +500,10 @@ if saved_school_id not in valid_school_ids:
 # MUEEN AI V3 — رأس مختصر مع إبقاء اختيار المدرسة والصلاحيات
 st.markdown("""
 <style>
-.block-container {padding-top: .65rem !important; padding-bottom: 1rem !important;}
+.block-container {padding-top: 4.25rem !important; padding-bottom: 1rem !important;}
+/* اترك مساحة أسفل شريط Streamlit العلوي حتى لا يختفي عنوان مُعين */
 div[data-testid="stVerticalBlock"] {gap: .65rem;}
+.mueen-v3-head {scroll-margin-top: 5rem;}
 .mueen-v3-head {
     background: linear-gradient(110deg,#10243A,#087E8B);
     color: white; border-radius: 14px; padding: 13px 20px;
