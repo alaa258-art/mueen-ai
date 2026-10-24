@@ -1634,6 +1634,41 @@ if db_client:
 
                 st.markdown("### 🧠 التحليل الذكي للتحصيل الدراسي")
                 st.caption("يُرسل إلى نموذج الذكاء الاصطناعي ملخص مجمّع حسب المهارة ونوع التقييم فقط، دون رموز الطلاب أو سجلاتهم الفردية.")
+                
+                if not skill_summary.empty:
+                    st.markdown("#### 📚 ملخص المهارات الحالية")
+
+                    skills_display = skill_summary[
+                        ["skill", "متوسط_الإتقان", "عدد_السجلات"]
+                    ].copy()
+
+                    skills_display["متوسط_الإتقان"] = (
+                        skills_display["متوسط_الإتقان"].round(1)
+                    )
+
+                    skills_display = skills_display.rename(
+                        columns={
+                            "skill": "المهارة",
+                            "متوسط_الإتقان": "متوسط الإتقان (%)",
+                            "عدد_السجلات": "عدد السجلات",
+                        }
+                    )
+
+                    st.dataframe(
+                        skills_display,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    st.bar_chart(
+                        skills_display,
+                        x="المهارة",
+                        y="متوسط الإتقان (%)",
+                        use_container_width=True,
+                    )
+                else:
+                    st.info("لا توجد بيانات مهارات كافية لعرض الملخص.")
+
                 if not key:
                     st.info("أضف OPENAI_API_KEY إلى Streamlit Secrets لتفعيل التحليل الذكي.")
                 elif st.button("✨ إنشاء تحليل ذكي للمؤشرات الحالية", key="run_achievement_analysis", use_container_width=True):
