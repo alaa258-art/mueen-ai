@@ -484,7 +484,7 @@ saved_school_id = st.session_state.get("mueen_school_id")
 valid_school_ids = [school["id"] for school in user_schools]
 if saved_school_id not in valid_school_ids:
     saved_school_id = user_schools[0]["id"]
-
+st.markdown("### 🏫 المدرسة النشطة")
 selected_school = st.selectbox(
     "🏫 المدرسة النشطة",
     options=user_schools,
