@@ -497,46 +497,61 @@ saved_school_id = st.session_state.get("mueen_school_id")
 valid_school_ids = [school["id"] for school in user_schools]
 if saved_school_id not in valid_school_ids:
     saved_school_id = user_schools[0]["id"]
-st.markdown("### 🏫 المدرسة النشطة")
-selected_school = st.selectbox(
-    "🏫 المدرسة النشطة",
-    options=user_schools,
-    index=next(i for i, school in enumerate(user_schools) if school["id"] == saved_school_id),
-    format_func=lambda school: school["name"],
-    key="mueen_school_selector",
-)
-st.session_state["mueen_school_id"] = selected_school["id"]
-st.session_state["mueen_school_role"] = selected_school["role"]
-st.caption(f"الدور في المدرسة المختارة: {selected_school['role']}")
+# MUEEN AI V3 — رأس مختصر مع إبقاء اختيار المدرسة والصلاحيات
+st.markdown("""
+<style>
+.block-container {padding-top: .65rem !important; padding-bottom: 1rem !important;}
+div[data-testid="stVerticalBlock"] {gap: .65rem;}
+.mueen-v3-head {
+    background: linear-gradient(110deg,#10243A,#087E8B);
+    color: white; border-radius: 14px; padding: 13px 20px;
+    border-bottom: 3px solid #D9A441;
+}
+.mueen-v3-head strong {font-size: 24px;}
+.mueen-v3-head small {color: #E2F4F5;}
+</style>
+<div class="mueen-v3-head">
+<strong>🎓 مُعين | MUEEN AI</strong><br>
+<small>منصة دعم التعلم الذكي · مساحة العمل التعليمية</small>
+</div>
+""", unsafe_allow_html=True)
 
-logout_col, title_col = st.columns([1, 4])
+school_col, logout_col = st.columns([5, 1], vertical_alignment="bottom")
+with school_col:
+    selected_school = st.selectbox(
+        "🏫 المدرسة النشطة",
+        options=user_schools,
+        index=next(i for i, school in enumerate(user_schools) if school["id"] == saved_school_id),
+        format_func=lambda school: school["name"],
+        key="mueen_school_selector",
+    )
 with logout_col:
-    if st.button("تسجيل الخروج", key="mueen_logout"):
+    if st.button("🚪 خروج", key="mueen_logout", use_container_width=True):
         try:
             session_client.auth.sign_out()
         except Exception:
             pass
         clear_login()
         st.rerun()
-with title_col:
-    st.title("🎓 مُعين | MUEEN AI")
-st.subheader("وكيل دعم التعلم الذكي — النسخة الثالثة")
-st.caption("تحليل المهارات • خطط علاجية • اختبارات متابعة • حفظ النتائج واستعراض سجل المتابعة")
-st.info("هذه نسخة تجريبية للمعلم. استخدم رموزًا تعليمية مستعارة بدل أسماء الطلاب، ولا تضع بيانات شخصية حساسة.")
-st.warning("استخدم بيانات تجريبية أو مجهولة الهوية فقط، وراجع المخرجات قبل استخدامها مع الطلاب.")
+st.session_state["mueen_school_id"] = selected_school["id"]
+st.session_state["mueen_school_role"] = selected_school["role"]
+st.caption(
+    "🔒 بيانات المدرسة النشطة فقط · استخدم رموزًا مستعارة للطلاب "
+    "وراجع نتائج الذكاء الاصطناعي قبل تطبيقها."
+)
 
-# MUEEN AI Navigation V2 — واجهة رئيسية وبطاقات تنقل بصرية
+# MUEEN AI Navigation V3 — بطاقات التبويب هي أزرار التنقل الحقيقية
 st.markdown("""
 <style>
 /* بطاقات التنقل قابلة للنقر: كل بطاقة تبويب Streamlit أصلي */
 div[data-testid="stTabs"] > div[data-baseweb="tab-list"] {
     display: flex; flex-wrap: wrap; gap: 12px;
-    background: transparent; border: none; padding: 10px 0 18px;
+    background: transparent; border: none; padding: 4px 0 10px;
 }
 div[data-testid="stTabs"] button[data-baseweb="tab"] {
-    flex: 1 1 190px; min-height: 84px; white-space: normal;
-    border: 0; border-radius: 16px; padding: 17px 15px;
-    font-size: 17px; font-weight: 800; color: white;
+    flex: 1 1 165px; min-height: 72px; white-space: normal;
+    border: 0; border-radius: 14px; padding: 12px 12px;
+    font-size: 16px; font-weight: 800; color: white;
     box-shadow: 0 5px 16px rgba(16,36,58,.12);
     transition: transform .18s ease, box-shadow .18s ease;
 }
@@ -558,7 +573,7 @@ div[data-testid="stTabs"] button[data-baseweb="tab"]:nth-child(7) { background: 
 div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {display:none;}
 .mueen-home-hero {
     background:linear-gradient(120deg,#10243A,#087E8B);
-    border-radius:20px; padding:30px; color:white; margin:12px 0 22px;
+    border-radius:16px; padding:16px 22px; color:white; margin:6px 0 10px;
     border-bottom:5px solid #D9A441;
 }
 .mueen-home-hero h2 {color:white; margin:0 0 10px;}
@@ -572,8 +587,7 @@ div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {display:none;}
 .mueen-home-card p {margin:0; color:#526174;}
 </style>
 """, unsafe_allow_html=True)
-st.markdown("### 🧭 مساحة العمل التعليمية")
-st.caption("اضغط على بطاقة القسم في شريط التنقل لعرض أدواته فقط. اختر الرئيسية للعودة إلى شاشة الترحيب.")
+st.caption("🧭 اختر البطاقة الملونة لفتح القسم المطلوب. تبويب «الرئيسية» يعيدك إلى هذه الشاشة.")
 mueen_tabs = st.tabs([
     "🏠 الرئيسية", "📊 لوحة القيادة", "📈 التحسن والمهارات", "🧠 التحليل الذكي",
     "📄 التقرير التنفيذي", "📚 الخطط والاختبارات", "🏫 إدارة المدرسة",
@@ -581,29 +595,11 @@ mueen_tabs = st.tabs([
 with mueen_tabs[0]:
     st.markdown("""
     <div class="mueen-home-hero">
-      <h2>🎓 مرحبًا بك في مُعين | MUEEN AI</h2>
-      <p>منصة دعم التعلم الذكي — مساحة عمل واحدة لاتخاذ قرارات تعليمية مبنية على البيانات.</p>
-      <p>👆 اختر إحدى بطاقات التنقل الملونة بالأعلى لفتح القسم المطلوب.</p>
+      <h2>✨ مرحبًا بك في مساحة عمل مُعين</h2>
+      <p>ست بطاقات ملونة بالأعلى تفتح أدوات القيادة والتحسن والتحليل والتقارير والخطط وإدارة المدرسة.</p>
+      <p>📌 اختر القسم مباشرة، ثم عد إلى «الرئيسية» متى شئت.</p>
     </div>
     """, unsafe_allow_html=True)
-    home_cards = [
-        ("📊 لوحة القيادة", "المؤشرات والسجلات والفلاتر", "#087E8B"),
-        ("📈 التحسن والمهارات", "الرسوم البيانية ومقارنة النتائج", "#2463A0"),
-        ("🧠 التحليل الذكي", "تحليل الإتقان والتوصيات", "#7553A6"),
-        ("📄 التقرير التنفيذي", "التقرير الإداري والطباعة PDF", "#A66A27"),
-        ("📚 الخطط والاختبارات", "الخطط العلاجية واختبارات المتابعة", "#20806A"),
-        ("🏫 إدارة المدرسة", "الصفوف والشعب والمواد", "#B45366"),
-    ]
-    for offset in (0, 3):
-        cols = st.columns(3)
-        for col, (label, description, color) in zip(cols, home_cards[offset:offset+3]):
-            with col:
-                st.markdown(
-                    f'<div class="mueen-home-card" style="border-top-color:{color}">'
-                    f'<h3>{label}</h3><p>{description}</p></div>',
-                    unsafe_allow_html=True,
-                )
-    st.info("للتنقل، استخدم البطاقات الملونة أعلى الصفحة. هذه البطاقات التعريفية تلخص وظائف الأقسام.")
 with mueen_tabs[6]:
     # =========================================================
     # إدارة الهيكل الأكاديمي - MUEEN AI
