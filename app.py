@@ -2645,7 +2645,7 @@ with mueen_page(5):
 
 
         st.markdown("### 6) سجل المتابعة المحفوظ")
-        hist_code = st.text_input("رمز الطالب/المجموعة لعرض السجل", value=student_code, key="history_code")
+        hist_code = st.text_input("رمز الطالب/المجموعة لعرض السجل", value="", key="history_code", help="أدخل رمز الطالب أو المجموعة الذي تريد عرض سجله.")
         if st.button("عرض السجل من Supabase"):
             try:
                 history = load_history(hist_code.strip())
