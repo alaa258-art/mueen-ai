@@ -1959,56 +1959,304 @@ if db_client:
                                 "والمهارة بين التقييمين."
                             )
 
-                        # إنشاء تقرير HTML قابل للتنزيل والطباعة إلى PDF
+                        
+                        # إنشاء تقرير HTML احترافي قابل للطباعة والحفظ PDF
+                        from datetime import datetime
+                        from zoneinfo import ZoneInfo
+
+                        report_date = datetime.now(
+                            ZoneInfo("Asia/Dubai")
+                        ).strftime("%Y-%m-%d %H:%M")
+
+                        active_school_name = html.escape(
+                            str(selected_school.get("name", "المدرسة"))
+                        )
+
                         safe_skills = []
                         for _, row in report_skills.sort_values(
                             "متوسط_الإتقان"
                         ).iterrows():
+                            skill_name = html.escape(str(row["skill"]))
+                            mastery_value = float(row["متوسط_الإتقان"])
+                            record_count = int(row["عدد_السجلات"])
+
                             safe_skills.append(
-                                "<tr><td>"
-                                + html.escape(str(row["skill"]))
-                                + "</td><td>"
-                                + f"{row['متوسط_الإتقان']:.1f}%"
-                                + "</td><td>"
-                                + str(int(row["عدد_السجلات"]))
-                                + "</td></tr>"
+                                "<tr><td>" + skill_name + "</td>"
+                                + f"<td>{mastery_value:.1f}%</td>"
+                                + f"<td>{record_count}</td></tr>"
                             )
 
-                        report_html = (
-                            "<!DOCTYPE html><html lang='ar' dir='rtl'><head>"
-                            "<meta charset='utf-8'>"
-                            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-                            "<title>التقرير التنفيذي - MUEEN AI</title>"
-                            "<style>"
-                            "body{font-family:Arial,sans-serif;margin:36px;line-height:1.8;color:#222}"
-                            "h1,h2{color:#174a6e}table{border-collapse:collapse;width:100%}"
-                            "th,td{border:1px solid #ccc;padding:9px;text-align:right}"
-                            "th{background:#eef3f7}.metric{padding:12px;background:#f5f7f9;"
-                            "margin:12px 0;border-radius:8px}"
-                            "@media print{body{margin:15mm}}"
-                            "</style></head><body>"
-                            "<h1>التقرير التنفيذي الذكي لمدير المدرسة</h1>"
-                            "<p>منصة MUEEN AI - مُعين</p>"
-                            "<div class='metric'><b>متوسط الإتقان العام:</b> "
-                            + f"{report_avg:.1f}%"
-                            + "<br><b>حد الإتقان المستهدف:</b> "
-                            + f"{threshold}%"
-                            + "<br><b>عدد المهارات دون الحد:</b> "
-                            + str(len(report_weak))
-                            + "</div><h2>نتائج المهارات</h2>"
-                            "<table><thead><tr><th>المهارة</th>"
-                            "<th>متوسط الإتقان</th><th>عدد السجلات</th>"
-                            "</tr></thead><tbody>"
-                            + "".join(safe_skills)
-                            + "</tbody></table><h2>التوصية التنفيذية</h2>"
-                            "<p>توجيه الدعم التعليمي إلى المهارات الأقل إتقانًا، "
-                            "وتنفيذ أنشطة علاجية مناسبة، ثم متابعة النتائج "
-                            "بتقييم لاحق. تُراجع النتائج من قبل المعلم والإدارة "
-                            "قبل اتخاذ القرارات.</p>"
-                            "<p>هذا التقرير مبني على البيانات والفلاتر الحالية "
-                            "ولا يثبت وحده العلاقة السببية بين التدخل والتحسن.</p>"
-                            "</body></html>"
-                        )
+                        if report_avg >= threshold:
+                            executive_summary = (
+                                "بلغ متوسط الإتقان العام الهدف المحدد أو تجاوزه. "
+                                "يوصى بالمحافظة على نقاط القوة ومعالجة المهارات "
+                                "التي ما زالت دون المستوى المستهدف."
+                            )
+                        else:
+                            executive_summary = (
+                                f"بلغ متوسط الإتقان {report_avg:.1f}%، "
+                                f"وهو أقل من الهدف المحدد البالغ {threshold}%. "
+                                "تُعطى الأولوية للمهارات الأقل إتقانًا، "
+                                "مع تنفيذ أنشطة علاجية وتقييم لاحق."
+                            )
+
+                        safe_summary = html.escape(executive_summary)
+
+                        if baseline_mean is not None:
+                            baseline_text = f"{baseline_mean:.1f}%"
+                        else:
+                            baseline_text = "لا توجد بيانات"
+
+                        if followup_mean is not None:
+                            followup_text = f"{followup_mean:.1f}%"
+                        else:
+                            followup_text = "لا توجد بيانات"
+
+                        report_html = f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>التقرير التنفيذي الذكي - MUEEN AI</title>
+<style>
+:root {{
+    --navy: #10243A;
+    --teal: #087E8B;
+    --gold: #D9A441;
+    --bg: #F3F6FA;
+    --text: #263445;
+    --muted: #64748B;
+}}
+* {{ box-sizing: border-box; }}
+body {{
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Tahoma, Arial, sans-serif;
+    line-height: 1.85;
+}}
+.page {{
+    max-width: 1000px;
+    margin: 28px auto;
+    padding: 30px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 5px 24px rgba(16,36,58,.08);
+}}
+.hero {{
+    padding: 28px;
+    border-radius: 13px;
+    color: white;
+    background: linear-gradient(120deg, var(--navy), #17465B, var(--teal));
+    border-bottom: 5px solid var(--gold);
+}}
+.brand {{
+    color: #F1CB72;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: .5px;
+}}
+h1 {{ margin: 8px 0; font-size: 27px; }}
+.subtitle {{ color: #E4EDF4; margin: 4px 0; }}
+.meta {{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: 18px 0;
+}}
+.meta div, .metric {{
+    padding: 14px;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    background: #F8FAFC;
+}}
+.label {{ color: var(--muted); font-size: 13px; }}
+.value {{ color: var(--navy); font-weight: bold; }}
+.metrics {{
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 18px 0;
+}}
+.metric {{ border-top: 4px solid var(--teal); }}
+.metric strong {{
+    display: block;
+    color: var(--navy);
+    font-size: 25px;
+}}
+h2 {{
+    color: var(--navy);
+    font-size: 19px;
+    border-right: 4px solid var(--gold);
+    padding-right: 10px;
+    margin-top: 28px;
+}}
+.summary {{
+    background: #EDF8F8;
+    border: 1px solid #B9E0E1;
+    border-radius: 10px;
+    padding: 16px;
+}}
+table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+}}
+th, td {{
+    border: 1px solid #DCE4EC;
+    padding: 10px;
+    text-align: right;
+}}
+th {{ background: var(--navy); color: white; }}
+tbody tr:nth-child(even) {{ background: #F3F6FA; }}
+.note {{
+    margin-top: 22px;
+    padding: 12px;
+    color: #526174;
+    background: #F8FAFC;
+    border-radius: 8px;
+    font-size: 12px;
+}}
+.actions {{
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+}}
+button {{
+    border: 0;
+    border-radius: 8px;
+    padding: 11px 18px;
+    color: white;
+    background: var(--teal);
+    font-size: 15px;
+    cursor: pointer;
+}}
+button.secondary {{ background: var(--navy); }}
+.footer {{
+    margin-top: 24px;
+    padding-top: 12px;
+    border-top: 1px solid #DCE4EC;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+}}
+@media (max-width: 600px) {{
+    .page {{ margin: 0; padding: 16px; border-radius: 0; }}
+    .metrics {{ grid-template-columns: 1fr; }}
+    .meta {{ grid-template-columns: 1fr; }}
+    h1 {{ font-size: 22px; }}
+}}
+@page {{ size: A4; margin: 12mm; }}
+@media print {{
+    body {{ background: white; font-size: 11pt; }}
+    .page {{
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        box-shadow: none;
+        border-radius: 0;
+    }}
+    .actions {{ display: none !important; }}
+    .hero, th {{
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }}
+    h2, table, .metrics, .summary {{
+        break-inside: avoid;
+    }}
+}}
+</style>
+</head>
+<body>
+<main class="page">
+    <header class="hero">
+        <div class="brand">MUEEN AI | مُعين</div>
+        <h1>التقرير التنفيذي الذكي</h1>
+        <p class="subtitle">تقرير متابعة التحصيل الدراسي والإتقان</p>
+    </header>
+
+    <section class="meta">
+        <div>
+            <div class="label">المدرسة النشطة</div>
+            <div class="value">{active_school_name}</div>
+        </div>
+        <div>
+            <div class="label">تاريخ إصدار التقرير</div>
+            <div class="value">{report_date}</div>
+        </div>
+    </section>
+
+    <div class="actions">
+        <button onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
+        <button class="secondary" onclick="window.close()">إغلاق</button>
+    </div>
+
+    <h2>المؤشرات الرئيسية</h2>
+    <section class="metrics">
+        <div class="metric">
+            <div class="label">متوسط الإتقان العام</div>
+            <strong>{report_avg:.1f}%</strong>
+        </div>
+        <div class="metric">
+            <div class="label">حد الإتقان المستهدف</div>
+            <strong>{threshold}%</strong>
+        </div>
+        <div class="metric">
+            <div class="label">مهارات دون الحد</div>
+            <strong>{len(report_weak)}</strong>
+        </div>
+    </section>
+
+    <h2>الملخص التنفيذي</h2>
+    <div class="summary">{safe_summary}</div>
+
+    <h2>نتائج المهارات</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>المهارة</th>
+                <th>متوسط الإتقان</th>
+                <th>عدد السجلات</th>
+            </tr>
+        </thead>
+        <tbody>
+            {"".join(safe_skills)}
+        </tbody>
+    </table>
+
+    <h2>مؤشرات التقييم القبلي والبعدي</h2>
+    <section class="metrics">
+        <div class="metric">
+            <div class="label">متوسط التقييم القبلي</div>
+            <strong>{baseline_text}</strong>
+        </div>
+        <div class="metric">
+            <div class="label">متوسط التقييم البعدي</div>
+            <strong>{followup_text}</strong>
+        </div>
+    </section>
+
+    <h2>التوصية التنفيذية</h2>
+    <p>
+        توجيه الدعم التعليمي إلى المهارات الأقل إتقانًا، وتنفيذ أنشطة علاجية
+        مناسبة، ثم إجراء تقييم لاحق لقياس التقدم. تُراجع النتائج من قبل
+        المعلم والإدارة قبل اتخاذ القرارات.
+    </p>
+
+    <div class="note">
+        يعتمد هذا التقرير على البيانات والفلاتر الحالية. وقد يختلف عدد
+        السجلات بين التقييم القبلي والبعدي؛ لذلك لا يثبت اختلاف المتوسطين
+        وحده تحسن الطلاب أنفسهم أو العلاقة السببية بين التدخل والنتيجة.
+        يجب مراجعة النتائج قبل اتخاذ قرارات تعليمية.
+    </div>
+
+    <footer class="footer">
+        MUEEN AI | مُعين — أداة مساندة للقرار التعليمي
+    </footer>
+</main>
+</body>
+</html>"""
+
 
                         st.download_button(
                             "📄 تنزيل التقرير التنفيذي HTML",
