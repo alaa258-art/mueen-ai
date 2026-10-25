@@ -1123,8 +1123,10 @@ with mueen_page(1):
         "ولا تخلط بينها وبين البيانات النموذجية غير المحفوظة."
     )
 
-if db_client:
-    if st.button("🔄 تحديث لوحة المتابعة", use_container_width=True):
+if db_client and st.session_state.get("mueen_active_page") in (1, 2, 3, 4):
+    with mueen_page(1):
+        refresh_clicked = st.button("🔄 تحديث لوحة المتابعة", use_container_width=True)
+    if refresh_clicked:
         st.session_state["refresh_dashboard"] = datetime.now().isoformat()
     try:
         dashboard_df = load_all_history(limit=1000)
@@ -1232,59 +1234,60 @@ if db_client:
                 )
 
             
-                st.markdown("### 📊 المؤشرات الرئيسية")
+                with mueen_page(1):
+                    st.markdown("### 📊 المؤشرات الرئيسية")
 
-                m1, m2, m3, m4 = st.columns(4)
+                    m1, m2, m3, m4 = st.columns(4)
 
-                with m1:
-                    st.metric(
-                        "👥 طلاب/مجموعات",
-                        students_n,
-                        help="عدد الطلاب أو المجموعات الظاهرة ضمن الفلاتر الحالية."
-                    )
+                    with m1:
+                        st.metric(
+                            "👥 طلاب/مجموعات",
+                            students_n,
+                            help="عدد الطلاب أو المجموعات الظاهرة ضمن الفلاتر الحالية."
+                        )
 
-                with m2:
-                    st.metric(
-                        "📋 السجلات المعروضة",
-                        int(len(filtered_df)),
-                        help="عدد سجلات التقييم المطابقة للفلاتر الحالية."
-                    )
+                    with m2:
+                        st.metric(
+                            "📋 السجلات المعروضة",
+                            int(len(filtered_df)),
+                            help="عدد سجلات التقييم المطابقة للفلاتر الحالية."
+                        )
 
-                with m3:
-                    st.metric(
-                        "🎯 متوسط جميع السجلات",
-                        f"{avg_mastery:.1f}%",
-                        help="متوسط الإتقان لجميع السجلات المعروضة."
-                    )
+                    with m3:
+                        st.metric(
+                            "🎯 متوسط جميع السجلات",
+                            f"{avg_mastery:.1f}%",
+                            help="متوسط الإتقان لجميع السجلات المعروضة."
+                        )
 
-                with m4:
-                    st.metric(
-                        "⚠️ دون حد الإتقان",
-                        below_threshold_n,
-                        help="عدد السجلات التي تقل عن حد الإتقان المحدد."
-                    )
+                    with m4:
+                        st.metric(
+                            "⚠️ دون حد الإتقان",
+                            below_threshold_n,
+                            help="عدد السجلات التي تقل عن حد الإتقان المحدد."
+                        )
 
-                st.markdown("### 📈 مقارنة الإتقان القبلي والبعدي")
+                    st.markdown("### 📈 مقارنة الإتقان القبلي والبعدي")
 
-                m5, m6 = st.columns(2)
+                    m5, m6 = st.columns(2)
 
-                with m5:
-                    st.metric(
-                        "📝 متوسط الإتقان القبلي",
-                        f"{baseline_avg:.1f}%" if baseline_avg is not None else "لا توجد بيانات"
-                    )
+                    with m5:
+                        st.metric(
+                            "📝 متوسط الإتقان القبلي",
+                            f"{baseline_avg:.1f}%" if baseline_avg is not None else "لا توجد بيانات"
+                        )
 
-                with m6:
-                    st.metric(
-                        "✅ متوسط الإتقان البعدي",
-                        f"{followup_avg:.1f}%" if followup_avg is not None else "لا توجد بيانات"
-                    )
+                    with m6:
+                        st.metric(
+                            "✅ متوسط الإتقان البعدي",
+                            f"{followup_avg:.1f}%" if followup_avg is not None else "لا توجد بيانات"
+                        )
 
-                if baseline_avg is not None and followup_avg is not None:
-                    st.caption(
-                        "تنبيه: قد يعتمد متوسطا القبلي والبعدي على سجلات مختلفة؛ "
-                        "لذلك لا يُعد الفرق بينهما مقياسًا مؤكدًا للتحسن الفردي."
-                    )
+                    if baseline_avg is not None and followup_avg is not None:
+                        st.caption(
+                            "تنبيه: قد يعتمد متوسطا القبلي والبعدي على سجلات مختلفة؛ "
+                            "لذلك لا يُعد الفرق بينهما مقياسًا مؤكدًا للتحسن الفردي."
+                        )
 
             with mueen_page(2):
                 st.markdown("### 📈 مقارنة التحسن الفعلي بين القبلي والبعدي")
@@ -2476,7 +2479,7 @@ if db_client:
     except Exception as e:
         st.error("تعذر تحميل لوحة المتابعة من Supabase.")
         st.caption(str(e)[:500])
-else:
+elif not db_client and st.session_state.get("mueen_active_page") in (1, 2, 3, 4):
     st.info("فعّل اتصال Supabase لعرض لوحة المتابعة المحفوظة.")
 
 with mueen_page(5):
