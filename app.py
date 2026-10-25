@@ -1145,7 +1145,7 @@ if db_client:
             # Filters apply only to the already school-scoped data returned by load_all_history.
            
 
-            with st.container():
+            with mueen_page(1):
                 st.markdown("### 🔎 تصفية التقارير")
 
                 # فلتر الفترة الزمنية
@@ -1194,410 +1194,410 @@ if db_client:
                     selected_student = st.selectbox(
                         "رمز الطالب/المجموعة", student_options, key="dashboard_student_filter"
                     )
-                filtered_df = dashboard_df.copy()
+            filtered_df = dashboard_df.copy()
+            if selected_skill != "كل المهارات":
+                filtered_df = filtered_df[filtered_df["skill"] == selected_skill]
+            selected_types = type_map[selected_type_label]
+            if selected_types:
+                filtered_df = filtered_df[
+                    filtered_df["assessment_type"].str.lower().isin([x.lower() for x in selected_types])
+                ]
+            if selected_student != "كل الطلاب/المجموعات":
+                filtered_df = filtered_df[filtered_df["student_code"] == selected_student]
+
+            if filtered_df.empty:
+                st.info("لا توجد سجلات تطابق عوامل التصفية المحددة.")
+            else:
+            
+                baseline = filtered_df[
+                    filtered_df["assessment_type"].str.lower().isin(["baseline", "قبلي"])
+                ]
+                followup = filtered_df[
+                    filtered_df["assessment_type"].str.lower().isin(["follow_up", "followup", "بعدي"])
+                ]
+
+                avg_mastery = float(filtered_df["mastery_pct"].mean())
+                students_n = int(filtered_df["student_code"].nunique())
+                below_threshold_n = int(
+                    (filtered_df["mastery_pct"] < threshold).sum()
+                )
+
+                baseline_avg = (
+                    float(baseline["mastery_pct"].mean())
+                    if not baseline.empty else None
+                )
+                followup_avg = (
+                    float(followup["mastery_pct"].mean())
+                    if not followup.empty else None
+                )
+
+            
+                st.markdown("### 📊 المؤشرات الرئيسية")
+
+                m1, m2, m3, m4 = st.columns(4)
+
+                with m1:
+                    st.metric(
+                        "👥 طلاب/مجموعات",
+                        students_n,
+                        help="عدد الطلاب أو المجموعات الظاهرة ضمن الفلاتر الحالية."
+                    )
+
+                with m2:
+                    st.metric(
+                        "📋 السجلات المعروضة",
+                        int(len(filtered_df)),
+                        help="عدد سجلات التقييم المطابقة للفلاتر الحالية."
+                    )
+
+                with m3:
+                    st.metric(
+                        "🎯 متوسط جميع السجلات",
+                        f"{avg_mastery:.1f}%",
+                        help="متوسط الإتقان لجميع السجلات المعروضة."
+                    )
+
+                with m4:
+                    st.metric(
+                        "⚠️ دون حد الإتقان",
+                        below_threshold_n,
+                        help="عدد السجلات التي تقل عن حد الإتقان المحدد."
+                    )
+
+                st.markdown("### 📈 مقارنة الإتقان القبلي والبعدي")
+
+                m5, m6 = st.columns(2)
+
+                with m5:
+                    st.metric(
+                        "📝 متوسط الإتقان القبلي",
+                        f"{baseline_avg:.1f}%" if baseline_avg is not None else "لا توجد بيانات"
+                    )
+
+                with m6:
+                    st.metric(
+                        "✅ متوسط الإتقان البعدي",
+                        f"{followup_avg:.1f}%" if followup_avg is not None else "لا توجد بيانات"
+                    )
+
+                if baseline_avg is not None and followup_avg is not None:
+                    st.caption(
+                        "تنبيه: قد يعتمد متوسطا القبلي والبعدي على سجلات مختلفة؛ "
+                        "لذلك لا يُعد الفرق بينهما مقياسًا مؤكدًا للتحسن الفردي."
+                    )
+
+            with mueen_page(2):
+                st.markdown("### 📈 مقارنة التحسن الفعلي بين القبلي والبعدي")
+
+
+                # نستخدم سجلات المدرسة والفترة المحددتين،
+                # مع تجاهل فلتر نوع التقييم حتى تتوفر المرحلتان.
+                comparison_source = dashboard_df.copy()
+
                 if selected_skill != "كل المهارات":
-                    filtered_df = filtered_df[filtered_df["skill"] == selected_skill]
-                selected_types = type_map[selected_type_label]
-                if selected_types:
-                    filtered_df = filtered_df[
-                        filtered_df["assessment_type"].str.lower().isin([x.lower() for x in selected_types])
+                    comparison_source = comparison_source[
+                        comparison_source["skill"] == selected_skill
                     ]
+
                 if selected_student != "كل الطلاب/المجموعات":
-                    filtered_df = filtered_df[filtered_df["student_code"] == selected_student]
+                    comparison_source = comparison_source[
+                        comparison_source["student_code"] == selected_student
+                    ]
 
-                if filtered_df.empty:
-                    st.info("لا توجد سجلات تطابق عوامل التصفية المحددة.")
+                comparison_source["type_norm"] = (
+                    comparison_source["assessment_type"]
+                    .astype(str).str.strip().str.lower()
+                )
+
+            
+                # استبعاد السجلات غير المرتبطة بشعبة ومادة محددتين
+                comparison_source = comparison_source.dropna(
+                    subset=["section_id", "subject_id"]
+                ).copy()
+
+                baseline_rows = (
+                    comparison_source[
+                        comparison_source["type_norm"].isin(["baseline", "قبلي"])
+                    ]
+                    .sort_values("created_at")
+                    .drop_duplicates(
+                        ["student_code", "skill", "section_id", "subject_id"],
+                        keep="last"
+                    )
+                    [[
+                        "student_code", "skill", "section_id",
+                        "subject_id", "mastery_pct"
+                    ]]
+                    .rename(columns={"mastery_pct": "القبلي (%)"})
+                )
+
+                followup_rows = (
+                    comparison_source[
+                        comparison_source["type_norm"].isin(
+                            ["follow_up", "followup", "بعدي"]
+                        )
+                    ]
+                    .sort_values("created_at")
+                    .drop_duplicates(
+                        ["student_code", "skill", "section_id", "subject_id"],
+                        keep="last"
+                    )
+                    [[
+                        "student_code", "skill", "section_id",
+                        "subject_id", "mastery_pct"
+                    ]]
+                    .rename(columns={"mastery_pct": "البعدي (%)"})
+                )
+
+                comparison = baseline_rows.merge(
+                    followup_rows,
+                    on=["student_code", "skill", "section_id", "subject_id"],
+                    how="inner"
+                )
+
+                if comparison.empty:
+                    st.info(
+                        "لا توجد بيانات قبلية وبعدية للطالب والمهارة نفسيهما "
+                        "ضمن الفترة المحددة. احفظ التقييمين أولًا."
+                    )
                 else:
-                
-                    baseline = filtered_df[
-                        filtered_df["assessment_type"].str.lower().isin(["baseline", "قبلي"])
-                    ]
-                    followup = filtered_df[
-                        filtered_df["assessment_type"].str.lower().isin(["follow_up", "followup", "بعدي"])
-                    ]
+                    comparison["التغير (نقطة مئوية)"] = (
+                        comparison["البعدي (%)"] - comparison["القبلي (%)"]
+                    ).round(1)
 
-                    avg_mastery = float(filtered_df["mastery_pct"].mean())
-                    students_n = int(filtered_df["student_code"].nunique())
-                    below_threshold_n = int(
-                        (filtered_df["mastery_pct"] < threshold).sum()
+                    comparison["حالة التحسن"] = comparison[
+                        "التغير (نقطة مئوية)"
+                    ].apply(
+                        lambda x: (
+                            "تحسن" if x > 0
+                            else "دون تغير" if x == 0
+                            else "تراجع"
+                        )
                     )
 
-                    baseline_avg = (
-                        float(baseline["mastery_pct"].mean())
-                        if not baseline.empty else None
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("عدد المقارنات", len(comparison))
+                    c2.metric(
+                        "متوسط التغير",
+                        f"{comparison['التغير (نقطة مئوية)'].mean():+.1f}"
+                        " نقطة مئوية"
                     )
-                    followup_avg = (
-                        float(followup["mastery_pct"].mean())
-                        if not followup.empty else None
+                    c3.metric(
+                        "حالات التحسن",
+                        int((comparison["التغير (نقطة مئوية)"] > 0).sum())
                     )
-
-                
-                    st.markdown("### 📊 المؤشرات الرئيسية")
-
-                    m1, m2, m3, m4 = st.columns(4)
-
-                    with m1:
-                        st.metric(
-                            "👥 طلاب/مجموعات",
-                            students_n,
-                            help="عدد الطلاب أو المجموعات الظاهرة ضمن الفلاتر الحالية."
-                        )
-
-                    with m2:
-                        st.metric(
-                            "📋 السجلات المعروضة",
-                            int(len(filtered_df)),
-                            help="عدد سجلات التقييم المطابقة للفلاتر الحالية."
-                        )
-
-                    with m3:
-                        st.metric(
-                            "🎯 متوسط جميع السجلات",
-                            f"{avg_mastery:.1f}%",
-                            help="متوسط الإتقان لجميع السجلات المعروضة."
-                        )
-
-                    with m4:
-                        st.metric(
-                            "⚠️ دون حد الإتقان",
-                            below_threshold_n,
-                            help="عدد السجلات التي تقل عن حد الإتقان المحدد."
-                        )
-
-                    st.markdown("### 📈 مقارنة الإتقان القبلي والبعدي")
-
-                    m5, m6 = st.columns(2)
-
-                    with m5:
-                        st.metric(
-                            "📝 متوسط الإتقان القبلي",
-                            f"{baseline_avg:.1f}%" if baseline_avg is not None else "لا توجد بيانات"
-                        )
-
-                    with m6:
-                        st.metric(
-                            "✅ متوسط الإتقان البعدي",
-                            f"{followup_avg:.1f}%" if followup_avg is not None else "لا توجد بيانات"
-                        )
-
-                    if baseline_avg is not None and followup_avg is not None:
-                        st.caption(
-                            "تنبيه: قد يعتمد متوسطا القبلي والبعدي على سجلات مختلفة؛ "
-                            "لذلك لا يُعد الفرق بينهما مقياسًا مؤكدًا للتحسن الفردي."
-                        )
-
-                with mueen_page(2):
-                    st.markdown("### 📈 مقارنة التحسن الفعلي بين القبلي والبعدي")
-
-
-                    # نستخدم سجلات المدرسة والفترة المحددتين،
-                    # مع تجاهل فلتر نوع التقييم حتى تتوفر المرحلتان.
-                    comparison_source = dashboard_df.copy()
-
-                    if selected_skill != "كل المهارات":
-                        comparison_source = comparison_source[
-                            comparison_source["skill"] == selected_skill
-                        ]
-
-                    if selected_student != "كل الطلاب/المجموعات":
-                        comparison_source = comparison_source[
-                            comparison_source["student_code"] == selected_student
-                        ]
-
-                    comparison_source["type_norm"] = (
-                        comparison_source["assessment_type"]
-                        .astype(str).str.strip().str.lower()
+                    c4.metric(
+                        "حالات التراجع",
+                        int((comparison["التغير (نقطة مئوية)"] < 0).sum())
                     )
 
-                
-                    # استبعاد السجلات غير المرتبطة بشعبة ومادة محددتين
-                    comparison_source = comparison_source.dropna(
-                        subset=["section_id", "subject_id"]
-                    ).copy()
+                    st.markdown("#### 📊 توزيع حالات التحسن")
 
-                    baseline_rows = (
-                        comparison_source[
-                            comparison_source["type_norm"].isin(["baseline", "قبلي"])
-                        ]
-                        .sort_values("created_at")
-                        .drop_duplicates(
-                            ["student_code", "skill", "section_id", "subject_id"],
-                            keep="last"
+                    status_counts = (
+                        comparison["حالة التحسن"]
+                        .value_counts()
+                        .reindex(
+                            ["تحسن", "دون تغير", "تراجع"],
+                            fill_value=0
                         )
-                        [[
-                            "student_code", "skill", "section_id",
-                            "subject_id", "mastery_pct"
-                        ]]
-                        .rename(columns={"mastery_pct": "القبلي (%)"})
                     )
 
-                    followup_rows = (
-                        comparison_source[
-                            comparison_source["type_norm"].isin(
-                                ["follow_up", "followup", "بعدي"]
+                    chart_df = status_counts.rename_axis(
+                        "حالة التحسن"
+                    ).reset_index(name="عدد الحالات")
+
+                    st.bar_chart(
+                        chart_df,
+                        x="حالة التحسن",
+                        y="عدد الحالات",
+                        use_container_width=True
+                    )
+
+                    display_comparison = comparison.rename(
+                        columns={
+                            "student_code": "رمز الطالب/المجموعة",
+                            "skill": "المهارة"
+                        }
+                    )
+
+                    st.dataframe(
+                        display_comparison,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    st.download_button(
+                        "📥 تنزيل تقرير مقارنة التحسن CSV",
+                        display_comparison.to_csv(
+                            index=False
+                        ).encode("utf-8-sig"),
+                        "mueen_improvement_comparison.csv",
+                        "text/csv",
+                        key="download_improvement_comparison"
+                    )
+
+                    st.markdown("### 🎯 مؤشرات أثر التدخل العلاجي")
+
+                    total_comparisons = len(comparison)
+                    improved_n = int(
+                        (comparison["التغير (نقطة مئوية)"] > 0).sum()
+                    )
+                    unchanged_n = int(
+                        (comparison["التغير (نقطة مئوية)"] == 0).sum()
+                    )
+                    declined_n = int(
+                        (comparison["التغير (نقطة مئوية)"] < 0).sum()
+                    )
+
+                    improvement_rate = (
+                        improved_n / total_comparisons * 100
+                        if total_comparisons > 0 else 0.0
+                    )
+
+                    avg_change = (
+                        float(comparison["التغير (نقطة مئوية)"].mean())
+                        if total_comparisons > 0 else 0.0
+                    )
+
+                    impact1, impact2, impact3 = st.columns(3)
+                    impact1.metric(
+                        "نسبة حالات التحسن",
+                        f"{improvement_rate:.1f}%"
+                    )
+                    impact2.metric(
+                        "متوسط التغير",
+                        f"{avg_change:+.1f} نقطة مئوية"
+                    )
+                    impact3.metric(
+                        "إجمالي المقارنات",
+                        total_comparisons
+                    )
+
+                    impact4, impact5, impact6 = st.columns(3)
+                    impact4.metric("حالات التحسن", improved_n)
+                    impact5.metric("دون تغير", unchanged_n)
+                    impact6.metric("حالات التراجع", declined_n)
+
+                    st.caption(
+                        "تعكس هذه المؤشرات المقارنات المتاحة فقط، "
+                        "ولا تثبت وحدها أن التحسن ناتج عن التدخل العلاجي."
+                    )
+
+                    st.markdown("### 🏫 تقرير التحسن حسب الشعبة والمادة")
+
+                    try:
+                        report_client = get_supabase()
+                        report_school_id = get_selected_school_id()
+
+                        if report_client is None or not report_school_id:
+                            st.warning("تعذر تحميل أسماء الشعب والمواد.")
+                        elif comparison.empty:
+                            st.info("لا توجد مقارنات متطابقة لإنشاء التقرير.")
+                        else:
+                            sections_response = (
+                                report_client.table("academic_sections")
+                                .select("id,grade_level,section_name,academic_year")
+                                .eq("school_id", report_school_id)
+                                .execute()
                             )
-                        ]
-                        .sort_values("created_at")
-                        .drop_duplicates(
-                            ["student_code", "skill", "section_id", "subject_id"],
-                            keep="last"
-                        )
-                        [[
-                            "student_code", "skill", "section_id",
-                            "subject_id", "mastery_pct"
-                        ]]
-                        .rename(columns={"mastery_pct": "البعدي (%)"})
-                    )
 
-                    comparison = baseline_rows.merge(
-                        followup_rows,
-                        on=["student_code", "skill", "section_id", "subject_id"],
-                        how="inner"
-                    )
-
-                    if comparison.empty:
-                        st.info(
-                            "لا توجد بيانات قبلية وبعدية للطالب والمهارة نفسيهما "
-                            "ضمن الفترة المحددة. احفظ التقييمين أولًا."
-                        )
-                    else:
-                        comparison["التغير (نقطة مئوية)"] = (
-                            comparison["البعدي (%)"] - comparison["القبلي (%)"]
-                        ).round(1)
-
-                        comparison["حالة التحسن"] = comparison[
-                            "التغير (نقطة مئوية)"
-                        ].apply(
-                            lambda x: (
-                                "تحسن" if x > 0
-                                else "دون تغير" if x == 0
-                                else "تراجع"
+                            subjects_response = (
+                                report_client.table("academic_subjects")
+                                .select("id,subject_name,academic_year")
+                                .eq("school_id", report_school_id)
+                                .execute()
                             )
-                        )
 
-                        c1, c2, c3, c4 = st.columns(4)
-                        c1.metric("عدد المقارنات", len(comparison))
-                        c2.metric(
-                            "متوسط التغير",
-                            f"{comparison['التغير (نقطة مئوية)'].mean():+.1f}"
-                            " نقطة مئوية"
-                        )
-                        c3.metric(
-                            "حالات التحسن",
-                            int((comparison["التغير (نقطة مئوية)"] > 0).sum())
-                        )
-                        c4.metric(
-                            "حالات التراجع",
-                            int((comparison["التغير (نقطة مئوية)"] < 0).sum())
-                        )
+                            sections_df = pd.DataFrame(sections_response.data or [])
+                            subjects_df = pd.DataFrame(subjects_response.data or [])
 
-                        st.markdown("#### 📊 توزيع حالات التحسن")
-
-                        status_counts = (
-                            comparison["حالة التحسن"]
-                            .value_counts()
-                            .reindex(
-                                ["تحسن", "دون تغير", "تراجع"],
-                                fill_value=0
-                            )
-                        )
-
-                        chart_df = status_counts.rename_axis(
-                            "حالة التحسن"
-                        ).reset_index(name="عدد الحالات")
-
-                        st.bar_chart(
-                            chart_df,
-                            x="حالة التحسن",
-                            y="عدد الحالات",
-                            use_container_width=True
-                        )
-
-                        display_comparison = comparison.rename(
-                            columns={
-                                "student_code": "رمز الطالب/المجموعة",
-                                "skill": "المهارة"
-                            }
-                        )
-
-                        st.dataframe(
-                            display_comparison,
-                            use_container_width=True,
-                            hide_index=True
-                        )
-
-                        st.download_button(
-                            "📥 تنزيل تقرير مقارنة التحسن CSV",
-                            display_comparison.to_csv(
-                                index=False
-                            ).encode("utf-8-sig"),
-                            "mueen_improvement_comparison.csv",
-                            "text/csv",
-                            key="download_improvement_comparison"
-                        )
-
-                        st.markdown("### 🎯 مؤشرات أثر التدخل العلاجي")
-
-                        total_comparisons = len(comparison)
-                        improved_n = int(
-                            (comparison["التغير (نقطة مئوية)"] > 0).sum()
-                        )
-                        unchanged_n = int(
-                            (comparison["التغير (نقطة مئوية)"] == 0).sum()
-                        )
-                        declined_n = int(
-                            (comparison["التغير (نقطة مئوية)"] < 0).sum()
-                        )
-
-                        improvement_rate = (
-                            improved_n / total_comparisons * 100
-                            if total_comparisons > 0 else 0.0
-                        )
-
-                        avg_change = (
-                            float(comparison["التغير (نقطة مئوية)"].mean())
-                            if total_comparisons > 0 else 0.0
-                        )
-
-                        impact1, impact2, impact3 = st.columns(3)
-                        impact1.metric(
-                            "نسبة حالات التحسن",
-                            f"{improvement_rate:.1f}%"
-                        )
-                        impact2.metric(
-                            "متوسط التغير",
-                            f"{avg_change:+.1f} نقطة مئوية"
-                        )
-                        impact3.metric(
-                            "إجمالي المقارنات",
-                            total_comparisons
-                        )
-
-                        impact4, impact5, impact6 = st.columns(3)
-                        impact4.metric("حالات التحسن", improved_n)
-                        impact5.metric("دون تغير", unchanged_n)
-                        impact6.metric("حالات التراجع", declined_n)
-
-                        st.caption(
-                            "تعكس هذه المؤشرات المقارنات المتاحة فقط، "
-                            "ولا تثبت وحدها أن التحسن ناتج عن التدخل العلاجي."
-                        )
-
-                        st.markdown("### 🏫 تقرير التحسن حسب الشعبة والمادة")
-
-                        try:
-                            report_client = get_supabase()
-                            report_school_id = get_selected_school_id()
-
-                            if report_client is None or not report_school_id:
-                                st.warning("تعذر تحميل أسماء الشعب والمواد.")
-                            elif comparison.empty:
-                                st.info("لا توجد مقارنات متطابقة لإنشاء التقرير.")
+                            if sections_df.empty or subjects_df.empty:
+                                st.warning("لا توجد بيانات كافية لأسماء الشعب والمواد.")
                             else:
-                                sections_response = (
-                                    report_client.table("academic_sections")
-                                    .select("id,grade_level,section_name,academic_year")
-                                    .eq("school_id", report_school_id)
-                                    .execute()
+                                sections_df = sections_df.rename(
+                                    columns={
+                                        "id": "section_id",
+                                        "grade_level": "الصف",
+                                        "section_name": "الشعبة",
+                                        "academic_year": "السنة الدراسية",
+                                    }
                                 )
 
-                                subjects_response = (
-                                    report_client.table("academic_subjects")
-                                    .select("id,subject_name,academic_year")
-                                    .eq("school_id", report_school_id)
-                                    .execute()
+                                subjects_df = subjects_df.rename(
+                                    columns={
+                                        "id": "subject_id",
+                                        "subject_name": "المادة",
+                                        "academic_year": "السنة الدراسية",
+                                    }
                                 )
 
-                                sections_df = pd.DataFrame(sections_response.data or [])
-                                subjects_df = pd.DataFrame(subjects_response.data or [])
+                                report_df = comparison.merge(
+                                    sections_df[
+                                        ["section_id", "الصف", "الشعبة", "السنة الدراسية"]
+                                    ],
+                                    on="section_id",
+                                    how="left"
+                                ).merge(
+                                    subjects_df[
+                                        ["subject_id", "المادة"]
+                                    ],
+                                    on="subject_id",
+                                    how="left"
+                                )
 
-                                if sections_df.empty or subjects_df.empty:
-                                    st.warning("لا توجد بيانات كافية لأسماء الشعب والمواد.")
+                                report_df = report_df.dropna(
+                                    subset=["الصف", "الشعبة", "المادة"]
+                                )
+
+                                if report_df.empty:
+                                    st.info("لم يتم العثور على أسماء مطابقة للشعب والمواد.")
                                 else:
-                                    sections_df = sections_df.rename(
-                                        columns={
-                                            "id": "section_id",
-                                            "grade_level": "الصف",
-                                            "section_name": "الشعبة",
-                                            "academic_year": "السنة الدراسية",
-                                        }
-                                    )
-
-                                    subjects_df = subjects_df.rename(
-                                        columns={
-                                            "id": "subject_id",
-                                            "subject_name": "المادة",
-                                            "academic_year": "السنة الدراسية",
-                                        }
-                                    )
-
-                                    report_df = comparison.merge(
-                                        sections_df[
-                                            ["section_id", "الصف", "الشعبة", "السنة الدراسية"]
-                                        ],
-                                        on="section_id",
-                                        how="left"
-                                    ).merge(
-                                        subjects_df[
-                                            ["subject_id", "المادة"]
-                                        ],
-                                        on="subject_id",
-                                        how="left"
-                                    )
-
-                                    report_df = report_df.dropna(
-                                        subset=["الصف", "الشعبة", "المادة"]
-                                    )
-
-                                    if report_df.empty:
-                                        st.info("لم يتم العثور على أسماء مطابقة للشعب والمواد.")
-                                    else:
-                                        report_summary = (
-                                            report_df.groupby(
-                                                ["الصف", "الشعبة", "المادة"],
-                                                dropna=False
-                                            )
-                                            .agg(
-                                                عدد_المقارنات=("التغير (نقطة مئوية)", "count"),
-                                                متوسط_القبلي=("القبلي (%)", "mean"),
-                                                متوسط_البعدي=("البعدي (%)", "mean"),
-                                                متوسط_التغير=("التغير (نقطة مئوية)", "mean"),
-                                                حالات_التحسن=(
-                                                    "التغير (نقطة مئوية)",
-                                                    lambda values: int((values > 0).sum())
-                                                ),
-                                                حالات_التراجع=(
-                                                    "التغير (نقطة مئوية)",
-                                                    lambda values: int((values < 0).sum())
-                                                ),
-                                            )
-                                            .reset_index()
+                                    report_summary = (
+                                        report_df.groupby(
+                                            ["الصف", "الشعبة", "المادة"],
+                                            dropna=False
                                         )
-
-                                        for column in [
-                                            "متوسط_القبلي",
-                                            "متوسط_البعدي",
-                                            "متوسط_التغير",
-                                        ]:
-                                            report_summary[column] = report_summary[column].round(1)
-
-                                        st.dataframe(
-                                            report_summary,
-                                            use_container_width=True,
-                                            hide_index=True
+                                        .agg(
+                                            عدد_المقارنات=("التغير (نقطة مئوية)", "count"),
+                                            متوسط_القبلي=("القبلي (%)", "mean"),
+                                            متوسط_البعدي=("البعدي (%)", "mean"),
+                                            متوسط_التغير=("التغير (نقطة مئوية)", "mean"),
+                                            حالات_التحسن=(
+                                                "التغير (نقطة مئوية)",
+                                                lambda values: int((values > 0).sum())
+                                            ),
+                                            حالات_التراجع=(
+                                                "التغير (نقطة مئوية)",
+                                                lambda values: int((values < 0).sum())
+                                            ),
                                         )
+                                        .reset_index()
+                                    )
 
-                                        st.download_button(
-                                            "📥 تنزيل تقرير التحسن حسب الشعبة والمادة",
-                                            report_summary.to_csv(
-                                                index=False
-                                            ).encode("utf-8-sig"),
-                                            "mueen_section_subject_improvement.csv",
-                                            "text/csv",
-                                            key="download_section_subject_improvement"
-                                        )
+                                    for column in [
+                                        "متوسط_القبلي",
+                                        "متوسط_البعدي",
+                                        "متوسط_التغير",
+                                    ]:
+                                        report_summary[column] = report_summary[column].round(1)
 
-                        except Exception as e:
+                                    st.dataframe(
+                                        report_summary,
+                                        use_container_width=True,
+                                        hide_index=True
+                                    )
+
+                                    st.download_button(
+                                        "📥 تنزيل تقرير التحسن حسب الشعبة والمادة",
+                                        report_summary.to_csv(
+                                            index=False
+                                        ).encode("utf-8-sig"),
+                                        "mueen_section_subject_improvement.csv",
+                                        "text/csv",
+                                        key="download_section_subject_improvement"
+                                    )
+
+                    except Exception as e:
                             st.error("تعذر إنشاء تقرير التحسن حسب الشعبة والمادة.")
                             st.caption(str(e)[:500])
 
