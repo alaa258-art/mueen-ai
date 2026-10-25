@@ -1605,20 +1605,72 @@ if db_client and st.session_state.get("mueen_active_page") in (1, 2, 3, 4):
                             st.caption(str(e)[:500])
 
 
-                with mueen_page(2):
-                    st.markdown("### 📊 مؤشرات الإتقان حسب المهارة")
-                    skill_summary = (
-                        filtered_df.groupby(["skill", "assessment_type"], as_index=False)
-                        .agg(متوسط_الإتقان=("mastery_pct", "mean"), عدد_السجلات=("student_code", "count"))
+            with mueen_page(2):
+                st.markdown("### 📊 مؤشرات الإتقان حسب المهارة")
+                skill_summary = (
+                    filtered_df.groupby(["skill", "assessment_type"], as_index=False)
+                    .agg(متوسط_الإتقان=("mastery_pct", "mean"), عدد_السجلات=("student_code", "count"))
+                )
+                skill_summary["متوسط_الإتقان"] = skill_summary["متوسط_الإتقان"].round(1)
+                st.bar_chart(
+                    filtered_df.groupby("skill")["mastery_pct"].mean().sort_values(ascending=False)
+                )
+                st.dataframe(
+                    skill_summary.rename(columns={
+                        "skill": "المهارة",
+                        "assessment_type": "نوع التقييم",
+                        "متوسط_الإتقان": "متوسط الإتقان (%)",
+                        "عدد_السجلات": "عدد السجلات",
+                    }),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            with mueen_page(3):
+                st.divider()
+                st.markdown("## 🧠 لوحة التحليل الذكي للمهارات")
+
+                # 1. تحليل مستوى الإتقان لكل مهارة
+                analysis_df = filtered_df.copy()
+                analysis_df["mastery_pct"] = pd.to_numeric(
+                    analysis_df["mastery_pct"], errors="coerce"
+                )
+                analysis_df = analysis_df.dropna(
+                    subset=["skill", "mastery_pct"]
+                )
+
+                if analysis_df.empty:
+                    st.info("لا توجد بيانات كافية لتحليل المهارات.")
+                else:
+                    skill_analysis = (
+                        analysis_df.groupby("skill", as_index=False)
+                        .agg(
+                            متوسط_الإتقان=("mastery_pct", "mean"),
+                            عدد_السجلات=("mastery_pct", "count"),
+                        )
                     )
-                    skill_summary["متوسط_الإتقان"] = skill_summary["متوسط_الإتقان"].round(1)
-                    st.bar_chart(
-                        filtered_df.groupby("skill")["mastery_pct"].mean().sort_values(ascending=False)
+                    skill_analysis["متوسط_الإتقان"] = (
+                        skill_analysis["متوسط_الإتقان"].round(1)
+                    )
+                    skill_analysis["الفجوة عن الهدف"] = (
+                        float(threshold) - skill_analysis["متوسط_الإتقان"]
+                    ).round(1)
+
+                    skill_analysis["حالة الإتقان"] = skill_analysis[
+                        "متوسط_الإتقان"
+                    ].apply(
+                        lambda x: "تحتاج إلى دعم"
+                        if x < threshold else "بلغت حد الإتقان"
+                    )
+
+                    # 2. المهارات الأقل إتقانًا
+                    st.markdown("### 1️⃣ المهارات الأقل إتقانًا")
+                    weakest = skill_analysis.sort_values(
+                        "متوسط_الإتقان", ascending=True
                     )
                     st.dataframe(
-                        skill_summary.rename(columns={
+                        weakest.rename(columns={
                             "skill": "المهارة",
-                            "assessment_type": "نوع التقييم",
                             "متوسط_الإتقان": "متوسط الإتقان (%)",
                             "عدد_السجلات": "عدد السجلات",
                         }),
@@ -1626,336 +1678,308 @@ if db_client and st.session_state.get("mueen_active_page") in (1, 2, 3, 4):
                         hide_index=True,
                     )
 
-                with mueen_page(3):
-                    st.divider()
-                    st.markdown("## 🧠 لوحة التحليل الذكي للمهارات")
-
-                    # 1. تحليل مستوى الإتقان لكل مهارة
-                    analysis_df = filtered_df.copy()
-                    analysis_df["mastery_pct"] = pd.to_numeric(
-                        analysis_df["mastery_pct"], errors="coerce"
+                    # 3. المهارات التي تقل عن حد الإتقان
+                    st.markdown(
+                        f"### 2️⃣ المهارات الأقل من حد الإتقان ({threshold}%)"
                     )
-                    analysis_df = analysis_df.dropna(
-                        subset=["skill", "mastery_pct"]
+                    below_target = skill_analysis[
+                        skill_analysis["متوسط_الإتقان"] < threshold
+                    ].copy()
+
+                    
+                    # 4. تحليل التحسن حسب المهارة من المقارنات المتطابقة
+                    st.markdown("### 3️⃣ المهارات التي تحسنت بعد التدخل")
+
+                    skill_change = pd.DataFrame(
+                        columns=[
+                            "skill",
+                            "متوسط_التغير",
+                            "عدد_المقارنات",
+                            "نتيجة التدخل",
+                        ]
                     )
 
-                    if analysis_df.empty:
-                        st.info("لا توجد بيانات كافية لتحليل المهارات.")
-                    else:
-                        skill_analysis = (
-                            analysis_df.groupby("skill", as_index=False)
+                    if "comparison" in locals() and not comparison.empty:
+                        skill_change = (
+                            comparison.groupby("skill", as_index=False)
                             .agg(
-                                متوسط_الإتقان=("mastery_pct", "mean"),
-                                عدد_السجلات=("mastery_pct", "count"),
+                                متوسط_التغير=("التغير (نقطة مئوية)", "mean"),
+                                عدد_المقارنات=("التغير (نقطة مئوية)", "count"),
                             )
                         )
-                        skill_analysis["متوسط_الإتقان"] = (
-                            skill_analysis["متوسط_الإتقان"].round(1)
-                        )
-                        skill_analysis["الفجوة عن الهدف"] = (
-                            float(threshold) - skill_analysis["متوسط_الإتقان"]
-                        ).round(1)
 
-                        skill_analysis["حالة الإتقان"] = skill_analysis[
-                            "متوسط_الإتقان"
+                        skill_change["متوسط_التغير"] = (
+                            skill_change["متوسط_التغير"].round(1)
+                        )
+
+                        skill_change["نتيجة التدخل"] = skill_change[
+                            "متوسط_التغير"
                         ].apply(
-                            lambda x: "تحتاج إلى دعم"
-                            if x < threshold else "بلغت حد الإتقان"
+                            lambda x: "تحسن" if x > 0
+                            else "دون تغير" if x == 0
+                            else "تراجع"
                         )
 
-                        # 2. المهارات الأقل إتقانًا
-                        st.markdown("### 1️⃣ المهارات الأقل إتقانًا")
-                        weakest = skill_analysis.sort_values(
-                            "متوسط_الإتقان", ascending=True
-                        )
                         st.dataframe(
-                            weakest.rename(columns={
+                            skill_change.rename(columns={
                                 "skill": "المهارة",
-                                "متوسط_الإتقان": "متوسط الإتقان (%)",
-                                "عدد_السجلات": "عدد السجلات",
+                                "متوسط_التغير": "متوسط التغير (نقطة مئوية)",
+                                "عدد_المقارنات": "عدد المقارنات",
                             }),
                             use_container_width=True,
                             hide_index=True,
                         )
-
-                        # 3. المهارات التي تقل عن حد الإتقان
-                        st.markdown(
-                            f"### 2️⃣ المهارات الأقل من حد الإتقان ({threshold}%)"
-                        )
-                        below_target = skill_analysis[
-                            skill_analysis["متوسط_الإتقان"] < threshold
-                        ].copy()
-
-                    
-                        # 4. تحليل التحسن حسب المهارة من المقارنات المتطابقة
-                        st.markdown("### 3️⃣ المهارات التي تحسنت بعد التدخل")
-
-                        skill_change = pd.DataFrame(
-                            columns=[
-                                "skill",
-                                "متوسط_التغير",
-                                "عدد_المقارنات",
-                                "نتيجة التدخل",
-                            ]
+                    else:
+                        st.info(
+                            "لا توجد مقارنات قبلية وبعدية متطابقة "
+                            "لتحديد المهارات التي تحسنت."
                         )
 
-                        if "comparison" in locals() and not comparison.empty:
-                            skill_change = (
-                                comparison.groupby("skill", as_index=False)
-                                .agg(
-                                    متوسط_التغير=("التغير (نقطة مئوية)", "mean"),
-                                    عدد_المقارنات=("التغير (نقطة مئوية)", "count"),
-                                )
-                            )
 
-                            skill_change["متوسط_التغير"] = (
-                                skill_change["متوسط_التغير"].round(1)
-                            )
+                    # 5. أولويات الخطط العلاجية
+                    st.markdown("### 4️⃣ المهارات ذات الأولوية العلاجية")
 
-                            skill_change["نتيجة التدخل"] = skill_change[
-                                "متوسط_التغير"
-                            ].apply(
-                                lambda x: "تحسن" if x > 0
-                                else "دون تغير" if x == 0
-                                else "تراجع"
-                            )
-
-                            st.dataframe(
-                                skill_change.rename(columns={
-                                    "skill": "المهارة",
-                                    "متوسط_التغير": "متوسط التغير (نقطة مئوية)",
-                                    "عدد_المقارنات": "عدد المقارنات",
-                                }),
-                                use_container_width=True,
-                                hide_index=True,
-                            )
-                        else:
-                            st.info(
-                                "لا توجد مقارنات قبلية وبعدية متطابقة "
-                                "لتحديد المهارات التي تحسنت."
-                            )
-
-
-                        # 5. أولويات الخطط العلاجية
-                        st.markdown("### 4️⃣ المهارات ذات الأولوية العلاجية")
-
-                        priorities = below_target.copy()
-                        if not priorities.empty:
-                            priorities["الأولوية"] = priorities[
-                                "متوسط_الإتقان"
-                            ].apply(
-                                lambda x: "عاجلة" if x < threshold - 20
-                                else "مرتفعة" if x < threshold - 10
-                                else "متوسطة"
-                            )
-
-                            priorities["الإجراء المقترح"] = priorities[
-                                "الأولوية"
-                            ].map({
-                                "عاجلة": "إعادة تدريس المهارة وتقديم دعم مكثف",
-                                "مرتفعة": "تنفيذ نشاط علاجي موجه ثم إعادة التقييم",
-                                "متوسطة": "تدريب إضافي ومتابعة التقدم",
-                            })
-
-                            st.dataframe(
-                                priorities.rename(columns={
-                                    "skill": "المهارة",
-                                    "متوسط_الإتقان": "متوسط الإتقان (%)",
-                                    "عدد_السجلات": "عدد السجلات",
-                                })[
-                                    [
-                                        "المهارة",
-                                        "متوسط الإتقان (%)",
-                                        "الأولوية",
-                                        "الإجراء المقترح",
-                                    ]
-                                ],
-                                use_container_width=True,
-                                hide_index=True,
-                            )
-                        else:
-                            st.success(
-                                "لا توجد مهارات دون حد الإتقان تحتاج إلى أولوية علاجية "
-                                "وفق البيانات والفلاتر الحالية."
-                            )
-
-                        # 6. تنزيل تقرير موحد
-                        report = skill_analysis.merge(
-                            skill_change[
-                                ["skill", "متوسط_التغير", "عدد_المقارنات"]
-                            ] if "comparison" in locals() and not comparison.empty
-                            else pd.DataFrame(columns=[
-                                "skill", "متوسط_التغير", "عدد_المقارنات"
-                            ]),
-                            on="skill",
-                            how="left",
+                    priorities = below_target.copy()
+                    if not priorities.empty:
+                        priorities["الأولوية"] = priorities[
+                            "متوسط_الإتقان"
+                        ].apply(
+                            lambda x: "عاجلة" if x < threshold - 20
+                            else "مرتفعة" if x < threshold - 10
+                            else "متوسطة"
                         )
 
-                        st.download_button(
-                            "📥 تنزيل تقرير التحليل الذكي للمهارات CSV",
-                            report.to_csv(index=False).encode("utf-8-sig"),
-                            "mueen_smart_skill_analysis.csv",
-                            "text/csv",
-                            key="download_smart_skill_analysis",
-                        )
+                        priorities["الإجراء المقترح"] = priorities[
+                            "الأولوية"
+                        ].map({
+                            "عاجلة": "إعادة تدريس المهارة وتقديم دعم مكثف",
+                            "مرتفعة": "تنفيذ نشاط علاجي موجه ثم إعادة التقييم",
+                            "متوسطة": "تدريب إضافي ومتابعة التقدم",
+                        })
 
-                        st.caption(
-                            "تعتمد النتائج على السجلات والفلاتر الحالية. "
-                            "الأولوية المقترحة مساندة للمعلم وليست قرارًا آليًا نهائيًا."
-                        )
-
-                    st.markdown("### 🧠 التحليل الذكي للتحصيل الدراسي")
-                    st.caption("يُرسل إلى نموذج الذكاء الاصطناعي ملخص مجمّع حسب المهارة ونوع التقييم فقط، دون رموز الطلاب أو سجلاتهم الفردية.")
-                
-                    if not skill_summary.empty:
-                        st.markdown("#### 📚 ملخص المهارات الحالية")
-
-                        skills_display = skill_summary[
-                            ["skill", "متوسط_الإتقان", "عدد_السجلات"]
-                        ].copy()
-
-                        skills_display["متوسط_الإتقان"] = (
-                            skills_display["متوسط_الإتقان"].round(1)
-                        )
-
-                        skills_display = skills_display.rename(
-                            columns={
+                        st.dataframe(
+                            priorities.rename(columns={
                                 "skill": "المهارة",
                                 "متوسط_الإتقان": "متوسط الإتقان (%)",
                                 "عدد_السجلات": "عدد السجلات",
-                            }
+                            })[
+                                [
+                                    "المهارة",
+                                    "متوسط الإتقان (%)",
+                                    "الأولوية",
+                                    "الإجراء المقترح",
+                                ]
+                            ],
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                    else:
+                        st.success(
+                            "لا توجد مهارات دون حد الإتقان تحتاج إلى أولوية علاجية "
+                            "وفق البيانات والفلاتر الحالية."
                         )
 
+                    # 6. تنزيل تقرير موحد
+                    report = skill_analysis.merge(
+                        skill_change[
+                            ["skill", "متوسط_التغير", "عدد_المقارنات"]
+                        ] if "comparison" in locals() and not comparison.empty
+                        else pd.DataFrame(columns=[
+                            "skill", "متوسط_التغير", "عدد_المقارنات"
+                        ]),
+                        on="skill",
+                        how="left",
+                    )
+
+                    st.download_button(
+                        "📥 تنزيل تقرير التحليل الذكي للمهارات CSV",
+                        report.to_csv(index=False).encode("utf-8-sig"),
+                        "mueen_smart_skill_analysis.csv",
+                        "text/csv",
+                        key="download_smart_skill_analysis",
+                    )
+
+                    st.caption(
+                        "تعتمد النتائج على السجلات والفلاتر الحالية. "
+                        "الأولوية المقترحة مساندة للمعلم وليست قرارًا آليًا نهائيًا."
+                    )
+
+                st.markdown("### 🧠 التحليل الذكي للتحصيل الدراسي")
+                st.caption("يُرسل إلى نموذج الذكاء الاصطناعي ملخص مجمّع حسب المهارة ونوع التقييم فقط، دون رموز الطلاب أو سجلاتهم الفردية.")
+                
+                if not skill_summary.empty:
+                    st.markdown("#### 📚 ملخص المهارات الحالية")
+
+                    skills_display = skill_summary[
+                        ["skill", "متوسط_الإتقان", "عدد_السجلات"]
+                    ].copy()
+
+                    skills_display["متوسط_الإتقان"] = (
+                        skills_display["متوسط_الإتقان"].round(1)
+                    )
+
+                    skills_display = skills_display.rename(
+                        columns={
+                            "skill": "المهارة",
+                            "متوسط_الإتقان": "متوسط الإتقان (%)",
+                            "عدد_السجلات": "عدد السجلات",
+                        }
+                    )
+
+                    st.dataframe(
+                        skills_display,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    st.bar_chart(
+                        skills_display,
+                        x="المهارة",
+                        y="متوسط الإتقان (%)",
+                        use_container_width=True,
+                    )
+                else:
+                    st.info("لا توجد بيانات مهارات كافية لعرض الملخص.")
+
+                if not key:
+                    st.info("أضف OPENAI_API_KEY إلى Streamlit Secrets لتفعيل التحليل الذكي.")
+                elif st.button("✨ إنشاء تحليل ذكي للمؤشرات الحالية", key="run_achievement_analysis", use_container_width=True):
+                    try:
+                        aggregate_for_ai = skill_summary[["skill", "assessment_type", "متوسط_الإتقان", "عدد_السجلات"]].copy()
+                        aggregate_for_ai["متوسط_الإتقان"] = aggregate_for_ai["متوسط_الإتقان"].round(1)
+                        aggregate_json = json.dumps(aggregate_for_ai.to_dict(orient="records"), ensure_ascii=False)
+                        with st.spinner("يحلل مُعين المؤشرات المجمعة..."):
+                            st.session_state["mueen_achievement_analysis"] = create_achievement_analysis(
+                                model, aggregate_json, threshold, output_language
+                            )
+                        st.session_state["mueen_achievement_analysis_scope"] = {
+                            "school_id": get_selected_school_id(),
+                            "filters": [selected_period, selected_skill, selected_type_label, selected_student],
+                        }
+                    except Exception as e:
+                        st.error("تعذر إنشاء التحليل الذكي. تحقق من إعدادات API وإتاحة النموذج.")
+                        st.caption(str(e)[:500])
+                analysis_scope = st.session_state.get("mueen_achievement_analysis_scope", {})
+                if st.session_state.get("mueen_achievement_analysis") and analysis_scope.get("school_id") == get_selected_school_id() and analysis_scope.get("filters") == [selected_period, selected_skill, selected_type_label, selected_student]:
+                    st.markdown(st.session_state["mueen_achievement_analysis"])
+                    st.download_button(
+                        "تنزيل التحليل الذكي TXT",
+                        st.session_state["mueen_achievement_analysis"],
+                        "mueen_achievement_analysis.txt",
+                        "text/plain",
+                        key="download_achievement_analysis",
+                    )
+                st.caption("راجع الاستنتاجات والتوصيات قبل تطبيقها؛ التحليل الذكي مساعد للمعلم وليس حكمًا نهائيًا على أداء الطلاب.")
+
+            with mueen_page(2):
+                if not baseline.empty and not followup.empty:
+                    st.markdown("### 📈 مؤشرات التحسن: التقييم القبلي والبعدي")
+
+                    base_latest = (
+                        baseline.sort_values("created_at")
+                        .drop_duplicates(["student_code", "skill"], keep="last")
+                        [["student_code", "skill", "mastery_pct"]]
+                        .rename(columns={"mastery_pct": "القبلي (%)"})
+                    )
+
+                    follow_latest = (
+                        followup.sort_values("created_at")
+                        .drop_duplicates(["student_code", "skill"], keep="last")
+                        [["student_code", "skill", "mastery_pct"]]
+                        .rename(columns={"mastery_pct": "البعدي (%)"})
+                    )
+
+                    comparison = base_latest.merge(
+                        follow_latest,
+                        on=["student_code", "skill"],
+                        how="inner",
+                    )
+
+                    if not comparison.empty:
+                        comparison["التغير (نقطة مئوية)"] = (
+                            comparison["البعدي (%)"] - comparison["القبلي (%)"]
+                        ).round(1)
+
+                        comparison["الحالة"] = comparison[
+                            "التغير (نقطة مئوية)"
+                        ].apply(
+                            lambda x: (
+                                "متحسن" if x > 0
+                                else "متراجع" if x < 0
+                                else "ثابت"
+                            )
+                        )
+
+                        comparison["مستوى البعدي"] = comparison[
+                            "البعدي (%)"
+                        ].apply(
+                            lambda x: (
+                                "بلغ حد الإتقان"
+                                if x >= threshold
+                                else "يحتاج إلى دعم"
+                            )
+                        )
+
+                        avg_change = float(
+                            comparison["التغير (نقطة مئوية)"].mean()
+                        )
+                        improved_n = int(
+                            (comparison["الحالة"] == "متحسن").sum()
+                        )
+                        unchanged_n = int(
+                            (comparison["الحالة"] == "ثابت").sum()
+                        )
+                        declined_n = int(
+                            (comparison["الحالة"] == "متراجع").sum()
+                        )
+                        achieved_n = int(
+                            (comparison["البعدي (%)"] >= threshold).sum()
+                        )
+                        support_n = int(
+                            (comparison["البعدي (%)"] < threshold).sum()
+                        )
+
+                        st.caption(
+                            "تُحسب المقارنة فقط للحالات التي لديها تقييم قبلي "
+                            "وبعدي للطالب/المجموعة نفسها والمهارة نفسها."
+                        )
+
+                        c1, c2, c3, c4 = st.columns(4)
+                        c1.metric("متوسط التحسن", f"{avg_change:+.1f} نقطة")
+                        c2.metric("حالات متحسنة", improved_n)
+                        c3.metric("حالات ثابتة", unchanged_n)
+                        c4.metric("حالات متراجعة", declined_n)
+
+                        c5, c6 = st.columns(2)
+                        c5.metric("بلغت حد الإتقان", achieved_n)
+                        c6.metric("تحتاج إلى دعم", support_n)
+
                         st.dataframe(
-                            skills_display,
+                            comparison.rename(
+                                columns={
+                                    "student_code": "رمز الطالب/المجموعة",
+                                    "skill": "المهارة",
+                                }
+                            ),
                             use_container_width=True,
                             hide_index=True,
                         )
 
-                        st.bar_chart(
-                            skills_display,
-                            x="المهارة",
-                            y="متوسط الإتقان (%)",
-                            use_container_width=True,
-                        )
-                    else:
-                        st.info("لا توجد بيانات مهارات كافية لعرض الملخص.")
-
-                    if not key:
-                        st.info("أضف OPENAI_API_KEY إلى Streamlit Secrets لتفعيل التحليل الذكي.")
-                    elif st.button("✨ إنشاء تحليل ذكي للمؤشرات الحالية", key="run_achievement_analysis", use_container_width=True):
-                        try:
-                            aggregate_for_ai = skill_summary[["skill", "assessment_type", "متوسط_الإتقان", "عدد_السجلات"]].copy()
-                            aggregate_for_ai["متوسط_الإتقان"] = aggregate_for_ai["متوسط_الإتقان"].round(1)
-                            aggregate_json = json.dumps(aggregate_for_ai.to_dict(orient="records"), ensure_ascii=False)
-                            with st.spinner("يحلل مُعين المؤشرات المجمعة..."):
-                                st.session_state["mueen_achievement_analysis"] = create_achievement_analysis(
-                                    model, aggregate_json, threshold, output_language
-                                )
-                            st.session_state["mueen_achievement_analysis_scope"] = {
-                                "school_id": get_selected_school_id(),
-                                "filters": [selected_period, selected_skill, selected_type_label, selected_student],
-                            }
-                        except Exception as e:
-                            st.error("تعذر إنشاء التحليل الذكي. تحقق من إعدادات API وإتاحة النموذج.")
-                            st.caption(str(e)[:500])
-                    analysis_scope = st.session_state.get("mueen_achievement_analysis_scope", {})
-                    if st.session_state.get("mueen_achievement_analysis") and analysis_scope.get("school_id") == get_selected_school_id() and analysis_scope.get("filters") == [selected_period, selected_skill, selected_type_label, selected_student]:
-                        st.markdown(st.session_state["mueen_achievement_analysis"])
-                        st.download_button(
-                            "تنزيل التحليل الذكي TXT",
-                            st.session_state["mueen_achievement_analysis"],
-                            "mueen_achievement_analysis.txt",
-                            "text/plain",
-                            key="download_achievement_analysis",
-                        )
-                    st.caption("راجع الاستنتاجات والتوصيات قبل تطبيقها؛ التحليل الذكي مساعد للمعلم وليس حكمًا نهائيًا على أداء الطلاب.")
-
-                with mueen_page(2):
-                    if not baseline.empty and not followup.empty:
-                        st.markdown("### 📈 مؤشرات التحسن: التقييم القبلي والبعدي")
-
-                        base_latest = (
-                            baseline.sort_values("created_at")
-                            .drop_duplicates(["student_code", "skill"], keep="last")
-                            [["student_code", "skill", "mastery_pct"]]
-                            .rename(columns={"mastery_pct": "القبلي (%)"})
-                        )
-
-                        follow_latest = (
-                            followup.sort_values("created_at")
-                            .drop_duplicates(["student_code", "skill"], keep="last")
-                            [["student_code", "skill", "mastery_pct"]]
-                            .rename(columns={"mastery_pct": "البعدي (%)"})
-                        )
-
-                        comparison = base_latest.merge(
-                            follow_latest,
-                            on=["student_code", "skill"],
-                            how="inner",
-                        )
-
-                        if not comparison.empty:
-                            comparison["التغير (نقطة مئوية)"] = (
-                                comparison["البعدي (%)"] - comparison["القبلي (%)"]
-                            ).round(1)
-
-                            comparison["الحالة"] = comparison[
-                                "التغير (نقطة مئوية)"
-                            ].apply(
-                                lambda x: (
-                                    "متحسن" if x > 0
-                                    else "متراجع" if x < 0
-                                    else "ثابت"
-                                )
-                            )
-
-                            comparison["مستوى البعدي"] = comparison[
-                                "البعدي (%)"
-                            ].apply(
-                                lambda x: (
-                                    "بلغ حد الإتقان"
-                                    if x >= threshold
-                                    else "يحتاج إلى دعم"
-                                )
-                            )
-
-                            avg_change = float(
-                                comparison["التغير (نقطة مئوية)"].mean()
-                            )
-                            improved_n = int(
-                                (comparison["الحالة"] == "متحسن").sum()
-                            )
-                            unchanged_n = int(
-                                (comparison["الحالة"] == "ثابت").sum()
-                            )
-                            declined_n = int(
-                                (comparison["الحالة"] == "متراجع").sum()
-                            )
-                            achieved_n = int(
-                                (comparison["البعدي (%)"] >= threshold).sum()
-                            )
-                            support_n = int(
-                                (comparison["البعدي (%)"] < threshold).sum()
-                            )
-
-                            st.caption(
-                                "تُحسب المقارنة فقط للحالات التي لديها تقييم قبلي "
-                                "وبعدي للطالب/المجموعة نفسها والمهارة نفسها."
-                            )
-
-                            c1, c2, c3, c4 = st.columns(4)
-                            c1.metric("متوسط التحسن", f"{avg_change:+.1f} نقطة")
-                            c2.metric("حالات متحسنة", improved_n)
-                            c3.metric("حالات ثابتة", unchanged_n)
-                            c4.metric("حالات متراجعة", declined_n)
-
-                            c5, c6 = st.columns(2)
-                            c5.metric("بلغت حد الإتقان", achieved_n)
-                            c6.metric("تحتاج إلى دعم", support_n)
-
+                        needs_support = comparison[
+                            comparison["البعدي (%)"] < threshold
+                        ]
+                        if not needs_support.empty:
+                            st.markdown("#### 🎯 حالات تحتاج إلى دعم إضافي")
                             st.dataframe(
-                                comparison.rename(
+                                needs_support[
+                                    [
+                                        "student_code",
+                                        "skill",
+                                        "القبلي (%)",
+                                        "البعدي (%)",
+                                        "التغير (نقطة مئوية)",
+                                    ]
+                                ].rename(
                                     columns={
                                         "student_code": "رمز الطالب/المجموعة",
                                         "skill": "المهارة",
@@ -1964,518 +1988,494 @@ if db_client and st.session_state.get("mueen_active_page") in (1, 2, 3, 4):
                                 use_container_width=True,
                                 hide_index=True,
                             )
-
-                            needs_support = comparison[
-                                comparison["البعدي (%)"] < threshold
-                            ]
-                            if not needs_support.empty:
-                                st.markdown("#### 🎯 حالات تحتاج إلى دعم إضافي")
-                                st.dataframe(
-                                    needs_support[
-                                        [
-                                            "student_code",
-                                            "skill",
-                                            "القبلي (%)",
-                                            "البعدي (%)",
-                                            "التغير (نقطة مئوية)",
-                                        ]
-                                    ].rename(
-                                        columns={
-                                            "student_code": "رمز الطالب/المجموعة",
-                                            "skill": "المهارة",
-                                        }
-                                    ),
-                                    use_container_width=True,
-                                    hide_index=True,
-                                )
-                        else:
-                            st.info(
-                                "لا توجد حالات لها تقييم قبلي وبعدي "
-                                "للطالب/المجموعة نفسها والمهارة نفسها ضمن الفلاتر الحالية."
-                            )
                     else:
                         st.info(
-                            "تحتاج مؤشرات التحسن إلى وجود تقييم قبلي وتقييم بعدي "
-                            "ضمن الفلاتر الحالية."
+                            "لا توجد حالات لها تقييم قبلي وبعدي "
+                            "للطالب/المجموعة نفسها والمهارة نفسها ضمن الفلاتر الحالية."
                         )
-
-                with mueen_page(4):
-                    # التقرير التنفيذي الذكي لمدير المدرسة
-                    st.markdown("## 🏫 التقرير التنفيذي الذكي لمدير المدرسة")
-                    st.caption(
-                        "تقرير موجز لدعم القرارات التعليمية، "
-                        "اعتمادًا على البيانات المعروضة والفلاتر الحالية."
+                else:
+                    st.info(
+                        "تحتاج مؤشرات التحسن إلى وجود تقييم قبلي وتقييم بعدي "
+                        "ضمن الفلاتر الحالية."
                     )
 
-                    if filtered_df.empty:
-                        st.info("لا توجد بيانات كافية لإنشاء التقرير التنفيذي.")
+            with mueen_page(4):
+                # التقرير التنفيذي الذكي لمدير المدرسة
+                st.markdown("## 🏫 التقرير التنفيذي الذكي لمدير المدرسة")
+                st.caption(
+                    "تقرير موجز لدعم القرارات التعليمية، "
+                    "اعتمادًا على البيانات المعروضة والفلاتر الحالية."
+                )
+
+                if filtered_df.empty:
+                    st.info("لا توجد بيانات كافية لإنشاء التقرير التنفيذي.")
+                else:
+                    report_df = filtered_df.copy()
+                    report_df["mastery_pct"] = pd.to_numeric(
+                        report_df["mastery_pct"], errors="coerce"
+                    )
+                    report_df = report_df.dropna(
+                        subset=["skill", "mastery_pct"]
+                    )
+
+                    if report_df.empty:
+                        st.info("لا توجد نتائج إتقان صالحة لإنشاء التقرير.")
                     else:
-                        report_df = filtered_df.copy()
-                        report_df["mastery_pct"] = pd.to_numeric(
-                            report_df["mastery_pct"], errors="coerce"
+                        report_avg = float(report_df["mastery_pct"].mean())
+                        report_skills = (
+                            report_df.groupby("skill", as_index=False)
+                            .agg(
+                                متوسط_الإتقان=("mastery_pct", "mean"),
+                                عدد_السجلات=("mastery_pct", "count"),
+                            )
                         )
-                        report_df = report_df.dropna(
-                            subset=["skill", "mastery_pct"]
+                        report_skills["متوسط_الإتقان"] = (
+                            report_skills["متوسط_الإتقان"].round(1)
+                        )
+                        report_weak = report_skills[
+                            report_skills["متوسط_الإتقان"] < threshold
+                        ].sort_values("متوسط_الإتقان")
+
+                        report_baseline = report_df[
+                            report_df["assessment_type"].astype(str).str.lower()
+                            .isin(["baseline", "قبلي"])
+                        ]
+                        report_followup = report_df[
+                            report_df["assessment_type"].astype(str).str.lower()
+                            .isin(["follow_up", "followup", "بعدي"])
+                        ]
+
+                        baseline_mean = (
+                            float(report_baseline["mastery_pct"].mean())
+                            if not report_baseline.empty else None
+                        )
+                        followup_mean = (
+                            float(report_followup["mastery_pct"].mean())
+                            if not report_followup.empty else None
                         )
 
-                        if report_df.empty:
-                            st.info("لا توجد نتائج إتقان صالحة لإنشاء التقرير.")
+                        r1, r2, r3 = st.columns(3)
+                        r1.metric("متوسط الإتقان", f"{report_avg:.1f}%")
+                        r2.metric("حد الإتقان المستهدف", f"{threshold}%")
+                        r3.metric("مهارات دون الحد", len(report_weak))
+
+                        st.markdown("### الملخص التنفيذي")
+                        if report_avg >= threshold:
+                            st.success(
+                                "متوسط الإتقان العام بلغ حد الإتقان المستهدف "
+                                "أو تجاوزه. يُنصح بالمحافظة على المستوى "
+                                "ومعالجة أي مهارات منخفضة بصورة فردية."
+                            )
                         else:
-                            report_avg = float(report_df["mastery_pct"].mean())
-                            report_skills = (
-                                report_df.groupby("skill", as_index=False)
-                                .agg(
-                                    متوسط_الإتقان=("mastery_pct", "mean"),
-                                    عدد_السجلات=("mastery_pct", "count"),
-                                )
-                            )
-                            report_skills["متوسط_الإتقان"] = (
-                                report_skills["متوسط_الإتقان"].round(1)
-                            )
-                            report_weak = report_skills[
-                                report_skills["متوسط_الإتقان"] < threshold
-                            ].sort_values("متوسط_الإتقان")
-
-                            report_baseline = report_df[
-                                report_df["assessment_type"].astype(str).str.lower()
-                                .isin(["baseline", "قبلي"])
-                            ]
-                            report_followup = report_df[
-                                report_df["assessment_type"].astype(str).str.lower()
-                                .isin(["follow_up", "followup", "بعدي"])
-                            ]
-
-                            baseline_mean = (
-                                float(report_baseline["mastery_pct"].mean())
-                                if not report_baseline.empty else None
-                            )
-                            followup_mean = (
-                                float(report_followup["mastery_pct"].mean())
-                                if not report_followup.empty else None
+                            st.warning(
+                                f"متوسط الإتقان العام {report_avg:.1f}%، "
+                                f"وهو أقل من الهدف المحدد ({threshold}%). "
+                                "تُوصى الأولوية بمراجعة المهارات الأقل إتقانًا "
+                                "وتنفيذ تدخلات تعليمية موجهة."
                             )
 
-                            r1, r2, r3 = st.columns(3)
-                            r1.metric("متوسط الإتقان", f"{report_avg:.1f}%")
-                            r2.metric("حد الإتقان المستهدف", f"{threshold}%")
-                            r3.metric("مهارات دون الحد", len(report_weak))
+                        st.markdown("### أبرز نقاط القوة")
+                        strengths = report_skills[
+                            report_skills["متوسط_الإتقان"] >= threshold
+                        ].sort_values("متوسط_الإتقان", ascending=False)
 
-                            st.markdown("### الملخص التنفيذي")
-                            if report_avg >= threshold:
-                                st.success(
-                                    "متوسط الإتقان العام بلغ حد الإتقان المستهدف "
-                                    "أو تجاوزه. يُنصح بالمحافظة على المستوى "
-                                    "ومعالجة أي مهارات منخفضة بصورة فردية."
-                                )
-                            else:
-                                st.warning(
-                                    f"متوسط الإتقان العام {report_avg:.1f}%، "
-                                    f"وهو أقل من الهدف المحدد ({threshold}%). "
-                                    "تُوصى الأولوية بمراجعة المهارات الأقل إتقانًا "
-                                    "وتنفيذ تدخلات تعليمية موجهة."
-                                )
-
-                            st.markdown("### أبرز نقاط القوة")
-                            strengths = report_skills[
-                                report_skills["متوسط_الإتقان"] >= threshold
-                            ].sort_values("متوسط_الإتقان", ascending=False)
-
-                            if strengths.empty:
+                        if strengths.empty:
+                            st.write(
+                                "لم تبلغ أي مهارة حد الإتقان المستهدف "
+                                "ضمن البيانات الحالية."
+                            )
+                        else:
+                            for _, row in strengths.iterrows():
                                 st.write(
-                                    "لم تبلغ أي مهارة حد الإتقان المستهدف "
-                                    "ضمن البيانات الحالية."
-                                )
-                            else:
-                                for _, row in strengths.iterrows():
-                                    st.write(
-                                        f"• {row['skill']}: "
-                                        f"{row['متوسط_الإتقان']:.1f}%"
-                                    )
-
-                            st.markdown("### أولويات الدعم")
-                            if report_weak.empty:
-                                st.write(
-                                    "لا توجد مهارات دون حد الإتقان "
-                                    "وفق البيانات والفلاتر الحالية."
-                                )
-                            else:
-                                st.dataframe(
-                                    report_weak.rename(columns={
-                                        "skill": "المهارة",
-                                        "متوسط_الإتقان": "متوسط الإتقان (%)",
-                                        "عدد_السجلات": "عدد السجلات",
-                                    }),
-                                    use_container_width=True,
-                                    hide_index=True,
-                                )
-                                st.write(
-                                    "التوصية: إعداد أنشطة علاجية للمهارات "
-                                    "الأقل إتقانًا، ثم إجراء تقييم متابعة "
-                                    "لقياس التقدم."
+                                    f"• {row['skill']}: "
+                                    f"{row['متوسط_الإتقان']:.1f}%"
                                 )
 
-                            st.markdown("### مؤشرات التقييم القبلي والبعدي")
-                            q1, q2 = st.columns(2)
-                            q1.metric(
-                                "متوسط التقييم القبلي",
-                                f"{baseline_mean:.1f}%"
-                                if baseline_mean is not None else "لا توجد بيانات"
+                        st.markdown("### أولويات الدعم")
+                        if report_weak.empty:
+                            st.write(
+                                "لا توجد مهارات دون حد الإتقان "
+                                "وفق البيانات والفلاتر الحالية."
                             )
-                            q2.metric(
-                                "متوسط التقييم البعدي",
-                                f"{followup_mean:.1f}%"
-                                if followup_mean is not None else "لا توجد بيانات"
+                        else:
+                            st.dataframe(
+                                report_weak.rename(columns={
+                                    "skill": "المهارة",
+                                    "متوسط_الإتقان": "متوسط الإتقان (%)",
+                                    "عدد_السجلات": "عدد السجلات",
+                                }),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                            st.write(
+                                "التوصية: إعداد أنشطة علاجية للمهارات "
+                                "الأقل إتقانًا، ثم إجراء تقييم متابعة "
+                                "لقياس التقدم."
                             )
 
-                            if baseline_mean is not None and followup_mean is not None:
-                                st.caption(
-                                    "تنبيه: الفرق بين المتوسطين العامين لا يثبت "
-                                    "تحسن الطلاب أنفسهم ما لم تُطابق سجلات الطالب "
-                                    "والمهارة بين التقييمين."
-                                )
+                        st.markdown("### مؤشرات التقييم القبلي والبعدي")
+                        q1, q2 = st.columns(2)
+                        q1.metric(
+                            "متوسط التقييم القبلي",
+                            f"{baseline_mean:.1f}%"
+                            if baseline_mean is not None else "لا توجد بيانات"
+                        )
+                        q2.metric(
+                            "متوسط التقييم البعدي",
+                            f"{followup_mean:.1f}%"
+                            if followup_mean is not None else "لا توجد بيانات"
+                        )
+
+                        if baseline_mean is not None and followup_mean is not None:
+                            st.caption(
+                                "تنبيه: الفرق بين المتوسطين العامين لا يثبت "
+                                "تحسن الطلاب أنفسهم ما لم تُطابق سجلات الطالب "
+                                "والمهارة بين التقييمين."
+                            )
 
                         
-                            # إنشاء تقرير HTML احترافي قابل للطباعة والحفظ PDF
-                            from datetime import datetime
-                            from zoneinfo import ZoneInfo
+                        # إنشاء تقرير HTML احترافي قابل للطباعة والحفظ PDF
+                        from datetime import datetime
+                        from zoneinfo import ZoneInfo
 
-                            report_date = datetime.now(
-                                ZoneInfo("Asia/Dubai")
-                            ).strftime("%Y-%m-%d %H:%M")
+                        report_date = datetime.now(
+                            ZoneInfo("Asia/Dubai")
+                        ).strftime("%Y-%m-%d %H:%M")
 
-                            active_school_name = html.escape(
-                                str(selected_school.get("name", "المدرسة"))
+                        active_school_name = html.escape(
+                            str(selected_school.get("name", "المدرسة"))
+                        )
+
+                        safe_skills = []
+                        for _, row in report_skills.sort_values(
+                            "متوسط_الإتقان"
+                        ).iterrows():
+                            skill_name = html.escape(str(row["skill"]))
+                            mastery_value = float(row["متوسط_الإتقان"])
+                            record_count = int(row["عدد_السجلات"])
+
+                            safe_skills.append(
+                                "<tr><td>" + skill_name + "</td>"
+                                + f"<td>{mastery_value:.1f}%</td>"
+                                + f"<td>{record_count}</td></tr>"
                             )
 
-                            safe_skills = []
-                            for _, row in report_skills.sort_values(
-                                "متوسط_الإتقان"
-                            ).iterrows():
-                                skill_name = html.escape(str(row["skill"]))
-                                mastery_value = float(row["متوسط_الإتقان"])
-                                record_count = int(row["عدد_السجلات"])
+                        if report_avg >= threshold:
+                            executive_summary = (
+                                "بلغ متوسط الإتقان العام الهدف المحدد أو تجاوزه. "
+                                "يوصى بالمحافظة على نقاط القوة ومعالجة المهارات "
+                                "التي ما زالت دون المستوى المستهدف."
+                            )
+                        else:
+                            executive_summary = (
+                                f"بلغ متوسط الإتقان {report_avg:.1f}%، "
+                                f"وهو أقل من الهدف المحدد البالغ {threshold}%. "
+                                "تُعطى الأولوية للمهارات الأقل إتقانًا، "
+                                "مع تنفيذ أنشطة علاجية وتقييم لاحق."
+                            )
 
-                                safe_skills.append(
-                                    "<tr><td>" + skill_name + "</td>"
-                                    + f"<td>{mastery_value:.1f}%</td>"
-                                    + f"<td>{record_count}</td></tr>"
-                                )
+                        safe_summary = html.escape(executive_summary)
 
-                            if report_avg >= threshold:
-                                executive_summary = (
-                                    "بلغ متوسط الإتقان العام الهدف المحدد أو تجاوزه. "
-                                    "يوصى بالمحافظة على نقاط القوة ومعالجة المهارات "
-                                    "التي ما زالت دون المستوى المستهدف."
-                                )
-                            else:
-                                executive_summary = (
-                                    f"بلغ متوسط الإتقان {report_avg:.1f}%، "
-                                    f"وهو أقل من الهدف المحدد البالغ {threshold}%. "
-                                    "تُعطى الأولوية للمهارات الأقل إتقانًا، "
-                                    "مع تنفيذ أنشطة علاجية وتقييم لاحق."
-                                )
+                        if baseline_mean is not None:
+                            baseline_text = f"{baseline_mean:.1f}%"
+                        else:
+                            baseline_text = "لا توجد بيانات"
 
-                            safe_summary = html.escape(executive_summary)
+                        if followup_mean is not None:
+                            followup_text = f"{followup_mean:.1f}%"
+                        else:
+                            followup_text = "لا توجد بيانات"
 
-                            if baseline_mean is not None:
-                                baseline_text = f"{baseline_mean:.1f}%"
-                            else:
-                                baseline_text = "لا توجد بيانات"
-
-                            if followup_mean is not None:
-                                followup_text = f"{followup_mean:.1f}%"
-                            else:
-                                followup_text = "لا توجد بيانات"
-
-                            report_html = f"""<!DOCTYPE html>
-    <html lang="ar" dir="rtl">
-    <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>التقرير التنفيذي الذكي - MUEEN AI</title>
-    <style>
-    :root {{
-        --navy: #10243A;
-        --teal: #087E8B;
-        --gold: #D9A441;
-        --bg: #F3F6FA;
-        --text: #263445;
-        --muted: #64748B;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
-        margin: 0;
-        background: var(--bg);
-        color: var(--text);
-        font-family: Tahoma, Arial, sans-serif;
-        line-height: 1.85;
-    }}
+                        report_html = f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>التقرير التنفيذي الذكي - MUEEN AI</title>
+<style>
+:root {{
+    --navy: #10243A;
+    --teal: #087E8B;
+    --gold: #D9A441;
+    --bg: #F3F6FA;
+    --text: #263445;
+    --muted: #64748B;
+}}
+* {{ box-sizing: border-box; }}
+body {{
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Tahoma, Arial, sans-serif;
+    line-height: 1.85;
+}}
+.page {{
+    max-width: 1000px;
+    margin: 28px auto;
+    padding: 30px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 5px 24px rgba(16,36,58,.08);
+}}
+.hero {{
+    padding: 28px;
+    border-radius: 13px;
+    color: white;
+    background: linear-gradient(120deg, var(--navy), #17465B, var(--teal));
+    border-bottom: 5px solid var(--gold);
+}}
+.brand {{
+    color: #F1CB72;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: .5px;
+}}
+h1 {{ margin: 8px 0; font-size: 27px; }}
+.subtitle {{ color: #E4EDF4; margin: 4px 0; }}
+.meta {{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: 18px 0;
+}}
+.meta div, .metric {{
+    padding: 14px;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    background: #F8FAFC;
+}}
+.label {{ color: var(--muted); font-size: 13px; }}
+.value {{ color: var(--navy); font-weight: bold; }}
+.metrics {{
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 18px 0;
+}}
+.metric {{ border-top: 4px solid var(--teal); }}
+.metric strong {{
+    display: block;
+    color: var(--navy);
+    font-size: 25px;
+}}
+h2 {{
+    color: var(--navy);
+    font-size: 19px;
+    border-right: 4px solid var(--gold);
+    padding-right: 10px;
+    margin-top: 28px;
+}}
+.summary {{
+    background: #EDF8F8;
+    border: 1px solid #B9E0E1;
+    border-radius: 10px;
+    padding: 16px;
+}}
+table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+}}
+th, td {{
+    border: 1px solid #DCE4EC;
+    padding: 10px;
+    text-align: right;
+}}
+th {{ background: var(--navy); color: white; }}
+tbody tr:nth-child(even) {{ background: #F3F6FA; }}
+.note {{
+    margin-top: 22px;
+    padding: 12px;
+    color: #526174;
+    background: #F8FAFC;
+    border-radius: 8px;
+    font-size: 12px;
+}}
+.actions {{
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+}}
+button {{
+    border: 0;
+    border-radius: 8px;
+    padding: 11px 18px;
+    color: white;
+    background: var(--teal);
+    font-size: 15px;
+    cursor: pointer;
+}}
+button.secondary {{ background: var(--navy); }}
+.footer {{
+    margin-top: 24px;
+    padding-top: 12px;
+    border-top: 1px solid #DCE4EC;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+}}
+@media (max-width: 600px) {{
+    .page {{ margin: 0; padding: 16px; border-radius: 0; }}
+    .metrics {{ grid-template-columns: 1fr; }}
+    .meta {{ grid-template-columns: 1fr; }}
+    h1 {{ font-size: 22px; }}
+}}
+@page {{ size: A4; margin: 12mm; }}
+@media print {{
+    body {{ background: white; font-size: 11pt; }}
     .page {{
-        max-width: 1000px;
-        margin: 28px auto;
-        padding: 30px;
-        background: #fff;
-        border-radius: 16px;
-        box-shadow: 0 5px 24px rgba(16,36,58,.08);
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        box-shadow: none;
+        border-radius: 0;
     }}
-    .hero {{
-        padding: 28px;
-        border-radius: 13px;
-        color: white;
-        background: linear-gradient(120deg, var(--navy), #17465B, var(--teal));
-        border-bottom: 5px solid var(--gold);
+    .actions {{ display: none !important; }}
+    .hero, th {{
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
     }}
-    .brand {{
-        color: #F1CB72;
-        font-size: 13px;
-        font-weight: bold;
-        letter-spacing: .5px;
+    h2, table, .metrics, .summary {{
+        break-inside: avoid;
     }}
-    h1 {{ margin: 8px 0; font-size: 27px; }}
-    .subtitle {{ color: #E4EDF4; margin: 4px 0; }}
-    .meta {{
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-        margin: 18px 0;
-    }}
-    .meta div, .metric {{
-        padding: 14px;
-        border: 1px solid #E2E8F0;
-        border-radius: 10px;
-        background: #F8FAFC;
-    }}
-    .label {{ color: var(--muted); font-size: 13px; }}
-    .value {{ color: var(--navy); font-weight: bold; }}
-    .metrics {{
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
-        margin: 18px 0;
-    }}
-    .metric {{ border-top: 4px solid var(--teal); }}
-    .metric strong {{
-        display: block;
-        color: var(--navy);
-        font-size: 25px;
-    }}
-    h2 {{
-        color: var(--navy);
-        font-size: 19px;
-        border-right: 4px solid var(--gold);
-        padding-right: 10px;
-        margin-top: 28px;
-    }}
-    .summary {{
-        background: #EDF8F8;
-        border: 1px solid #B9E0E1;
-        border-radius: 10px;
-        padding: 16px;
-    }}
-    table {{
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 12px;
-    }}
-    th, td {{
-        border: 1px solid #DCE4EC;
-        padding: 10px;
-        text-align: right;
-    }}
-    th {{ background: var(--navy); color: white; }}
-    tbody tr:nth-child(even) {{ background: #F3F6FA; }}
-    .note {{
-        margin-top: 22px;
-        padding: 12px;
-        color: #526174;
-        background: #F8FAFC;
-        border-radius: 8px;
-        font-size: 12px;
-    }}
-    .actions {{
-        display: flex;
-        gap: 10px;
-        margin: 20px 0;
-    }}
-    button {{
-        border: 0;
-        border-radius: 8px;
-        padding: 11px 18px;
-        color: white;
-        background: var(--teal);
-        font-size: 15px;
-        cursor: pointer;
-    }}
-    button.secondary {{ background: var(--navy); }}
-    .footer {{
-        margin-top: 24px;
-        padding-top: 12px;
-        border-top: 1px solid #DCE4EC;
-        color: var(--muted);
-        font-size: 12px;
-        text-align: center;
-    }}
-    @media (max-width: 600px) {{
-        .page {{ margin: 0; padding: 16px; border-radius: 0; }}
-        .metrics {{ grid-template-columns: 1fr; }}
-        .meta {{ grid-template-columns: 1fr; }}
-        h1 {{ font-size: 22px; }}
-    }}
-    @page {{ size: A4; margin: 12mm; }}
-    @media print {{
-        body {{ background: white; font-size: 11pt; }}
-        .page {{
-            max-width: none;
-            margin: 0;
-            padding: 0;
-            box-shadow: none;
-            border-radius: 0;
-        }}
-        .actions {{ display: none !important; }}
-        .hero, th {{
-            print-color-adjust: exact;
-            -webkit-print-color-adjust: exact;
-        }}
-        h2, table, .metrics, .summary {{
-            break-inside: avoid;
-        }}
-    }}
-    </style>
-    </head>
-    <body>
-    <main class="page">
-        <header class="hero">
-            <div class="brand">MUEEN AI | مُعين</div>
-            <h1>التقرير التنفيذي الذكي</h1>
-            <p class="subtitle">تقرير متابعة التحصيل الدراسي والإتقان</p>
-        </header>
+}}
+</style>
+</head>
+<body>
+<main class="page">
+    <header class="hero">
+        <div class="brand">MUEEN AI | مُعين</div>
+        <h1>التقرير التنفيذي الذكي</h1>
+        <p class="subtitle">تقرير متابعة التحصيل الدراسي والإتقان</p>
+    </header>
 
-        <section class="meta">
-            <div>
-                <div class="label">المدرسة النشطة</div>
-                <div class="value">{active_school_name}</div>
-            </div>
-            <div>
-                <div class="label">تاريخ إصدار التقرير</div>
-                <div class="value">{report_date}</div>
-            </div>
-        </section>
-
-        <div class="actions">
-            <button onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
-            <button class="secondary" onclick="window.close()">إغلاق</button>
+    <section class="meta">
+        <div>
+            <div class="label">المدرسة النشطة</div>
+            <div class="value">{active_school_name}</div>
         </div>
-
-        <h2>المؤشرات الرئيسية</h2>
-        <section class="metrics">
-            <div class="metric">
-                <div class="label">متوسط الإتقان العام</div>
-                <strong>{report_avg:.1f}%</strong>
-            </div>
-            <div class="metric">
-                <div class="label">حد الإتقان المستهدف</div>
-                <strong>{threshold}%</strong>
-            </div>
-            <div class="metric">
-                <div class="label">مهارات دون الحد</div>
-                <strong>{len(report_weak)}</strong>
-            </div>
-        </section>
-
-        <h2>الملخص التنفيذي</h2>
-        <div class="summary">{safe_summary}</div>
-
-        <h2>نتائج المهارات</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>المهارة</th>
-                    <th>متوسط الإتقان</th>
-                    <th>عدد السجلات</th>
-                </tr>
-            </thead>
-            <tbody>
-                {"".join(safe_skills)}
-            </tbody>
-        </table>
-
-        <h2>مؤشرات التقييم القبلي والبعدي</h2>
-        <section class="metrics">
-            <div class="metric">
-                <div class="label">متوسط التقييم القبلي</div>
-                <strong>{baseline_text}</strong>
-            </div>
-            <div class="metric">
-                <div class="label">متوسط التقييم البعدي</div>
-                <strong>{followup_text}</strong>
-            </div>
-        </section>
-
-        <h2>التوصية التنفيذية</h2>
-        <p>
-            توجيه الدعم التعليمي إلى المهارات الأقل إتقانًا، وتنفيذ أنشطة علاجية
-            مناسبة، ثم إجراء تقييم لاحق لقياس التقدم. تُراجع النتائج من قبل
-            المعلم والإدارة قبل اتخاذ القرارات.
-        </p>
-
-        <div class="note">
-            يعتمد هذا التقرير على البيانات والفلاتر الحالية. وقد يختلف عدد
-            السجلات بين التقييم القبلي والبعدي؛ لذلك لا يثبت اختلاف المتوسطين
-            وحده تحسن الطلاب أنفسهم أو العلاقة السببية بين التدخل والنتيجة.
-            يجب مراجعة النتائج قبل اتخاذ قرارات تعليمية.
+        <div>
+            <div class="label">تاريخ إصدار التقرير</div>
+            <div class="value">{report_date}</div>
         </div>
+    </section>
 
-        <footer class="footer">
-            MUEEN AI | مُعين — أداة مساندة للقرار التعليمي
-        </footer>
-    </main>
-    </body>
-    </html>"""
+    <div class="actions">
+        <button onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
+        <button class="secondary" onclick="window.close()">إغلاق</button>
+    </div>
+
+    <h2>المؤشرات الرئيسية</h2>
+    <section class="metrics">
+        <div class="metric">
+            <div class="label">متوسط الإتقان العام</div>
+            <strong>{report_avg:.1f}%</strong>
+        </div>
+        <div class="metric">
+            <div class="label">حد الإتقان المستهدف</div>
+            <strong>{threshold}%</strong>
+        </div>
+        <div class="metric">
+            <div class="label">مهارات دون الحد</div>
+            <strong>{len(report_weak)}</strong>
+        </div>
+    </section>
+
+    <h2>الملخص التنفيذي</h2>
+    <div class="summary">{safe_summary}</div>
+
+    <h2>نتائج المهارات</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>المهارة</th>
+                <th>متوسط الإتقان</th>
+                <th>عدد السجلات</th>
+            </tr>
+        </thead>
+        <tbody>
+            {"".join(safe_skills)}
+        </tbody>
+    </table>
+
+    <h2>مؤشرات التقييم القبلي والبعدي</h2>
+    <section class="metrics">
+        <div class="metric">
+            <div class="label">متوسط التقييم القبلي</div>
+            <strong>{baseline_text}</strong>
+        </div>
+        <div class="metric">
+            <div class="label">متوسط التقييم البعدي</div>
+            <strong>{followup_text}</strong>
+        </div>
+    </section>
+
+    <h2>التوصية التنفيذية</h2>
+    <p>
+        توجيه الدعم التعليمي إلى المهارات الأقل إتقانًا، وتنفيذ أنشطة علاجية
+        مناسبة، ثم إجراء تقييم لاحق لقياس التقدم. تُراجع النتائج من قبل
+        المعلم والإدارة قبل اتخاذ القرارات.
+    </p>
+
+    <div class="note">
+        يعتمد هذا التقرير على البيانات والفلاتر الحالية. وقد يختلف عدد
+        السجلات بين التقييم القبلي والبعدي؛ لذلك لا يثبت اختلاف المتوسطين
+        وحده تحسن الطلاب أنفسهم أو العلاقة السببية بين التدخل والنتيجة.
+        يجب مراجعة النتائج قبل اتخاذ قرارات تعليمية.
+    </div>
+
+    <footer class="footer">
+        MUEEN AI | مُعين — أداة مساندة للقرار التعليمي
+    </footer>
+</main>
+</body>
+</html>"""
 
 
-                            st.download_button(
-                                "📄 تنزيل التقرير التنفيذي HTML",
-                                data=report_html.encode("utf-8"),
-                                file_name="mueen_executive_report.html",
-                                mime="text/html",
-                                key="download_mueen_executive_report",
-                            )
-                            st.caption(
-                                "يمكن فتح ملف HTML في المتصفح ثم اختيار طباعة "
-                                "وحفظ بصيغة PDF."
-                            )
+                        st.download_button(
+                            "📄 تنزيل التقرير التنفيذي HTML",
+                            data=report_html.encode("utf-8"),
+                            file_name="mueen_executive_report.html",
+                            mime="text/html",
+                            key="download_mueen_executive_report",
+                        )
+                        st.caption(
+                            "يمكن فتح ملف HTML في المتصفح ثم اختيار طباعة "
+                            "وحفظ بصيغة PDF."
+                        )
 
-                with mueen_page(1):
-                    st.markdown("### 🗂️ أحدث السجلات المحفوظة")
-                    display_cols = [
-                        c for c in [
-                            "student_code", "skill", "assessment_type", "score",
-                            "max_score", "mastery_pct", "recommendation", "created_at"
-                        ] if c in filtered_df.columns
-                    ]
-                    st.dataframe(
-                        filtered_df.sort_values("created_at", ascending=False)[display_cols].head(200).rename(
-                            columns={
-                                "student_code": "رمز الطالب/المجموعة",
-                                "skill": "المهارة",
-                                "assessment_type": "نوع التقييم",
-                                "score": "الدرجة",
-                                "max_score": "الدرجة الكلية",
-                                "mastery_pct": "الإتقان (%)",
-                                "recommendation": "التوصية",
-                                "created_at": "تاريخ الحفظ",
-                            }
-                        ),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-                    st.download_button(
-                        "تنزيل السجلات المصفّاة CSV",
-                        filtered_df.to_csv(index=False).encode("utf-8-sig"),
-                        "mueen_dashboard_filtered_records.csv",
-                        "text/csv",
-                    )
-                    if len(dashboard_df) >= 1000:
-                        st.caption("تنبيه: عُرضت أحدث 1000 سجل فقط في لوحة المتابعة.")
+            with mueen_page(1):
+                st.markdown("### 🗂️ أحدث السجلات المحفوظة")
+                display_cols = [
+                    c for c in [
+                        "student_code", "skill", "assessment_type", "score",
+                        "max_score", "mastery_pct", "recommendation", "created_at"
+                    ] if c in filtered_df.columns
+                ]
+                st.dataframe(
+                    filtered_df.sort_values("created_at", ascending=False)[display_cols].head(200).rename(
+                        columns={
+                            "student_code": "رمز الطالب/المجموعة",
+                            "skill": "المهارة",
+                            "assessment_type": "نوع التقييم",
+                            "score": "الدرجة",
+                            "max_score": "الدرجة الكلية",
+                            "mastery_pct": "الإتقان (%)",
+                            "recommendation": "التوصية",
+                            "created_at": "تاريخ الحفظ",
+                        }
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                st.download_button(
+                    "تنزيل السجلات المصفّاة CSV",
+                    filtered_df.to_csv(index=False).encode("utf-8-sig"),
+                    "mueen_dashboard_filtered_records.csv",
+                    "text/csv",
+                )
+                if len(dashboard_df) >= 1000:
+                    st.caption("تنبيه: عُرضت أحدث 1000 سجل فقط في لوحة المتابعة.")
     except Exception as e:
         st.error("تعذر تحميل لوحة المتابعة من Supabase.")
         st.caption(str(e)[:500])
