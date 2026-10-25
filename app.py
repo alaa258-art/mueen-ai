@@ -1145,7 +1145,7 @@ if db_client:
             # Filters apply only to the already school-scoped data returned by load_all_history.
            
 
-            with mueen_page(1):
+            with st.container():
                 st.markdown("### 🔎 تصفية التقارير")
 
                 # فلتر الفترة الزمنية
