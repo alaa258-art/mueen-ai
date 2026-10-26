@@ -328,7 +328,9 @@ is_arabic = language == "العربية"
 
 if not st.session_state.get("mueen_access_token"):
 
-    # اختيار اللغة
+    # اختيار اللغة - مساحة علوية آمنة للعنوان
+    st.markdown('<div style="height: 18px;"></div>', unsafe_allow_html=True)
+
     _, language_col = st.columns([3, 1])
     with language_col:
         selected_language = st.selectbox(
