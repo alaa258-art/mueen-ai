@@ -361,6 +361,40 @@ if not st.session_state.get("mueen_access_token"):
         .main div[data-testid="stMarkdownContainer"] {{
             text-align: {text_align};
         }}
+        /* MUEEN AI - Compact Login Layout */
+
+.block-container {
+    padding-top: 0.8rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+/* تقليل المسافات بين العناصر */
+div[data-testid="stVerticalBlock"] {
+    gap: 0.45rem !important;
+}
+
+/* تقليل ارتفاع حقول الإدخال */
+div[data-testid="stTextInput"] input {
+    min-height: 38px !important;
+    height: 38px !important;
+}
+
+/* تقليل ارتفاع زر الدخول */
+div[data-testid="stButton"] button {
+    min-height: 40px !important;
+    padding: 6px 14px !important;
+}
+
+/* تقليل المسافة حول العناوين */
+h1, h2, h3 {
+    margin-top: 0.3rem !important;
+    margin-bottom: 0.3rem !important;
+}
+
+/* ضبط المسافة أسفل الفقرات */
+p {
+    margin-bottom: 0.35rem !important;
+}
         </style>
         """,
         unsafe_allow_html=True
