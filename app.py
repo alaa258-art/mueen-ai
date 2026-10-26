@@ -346,7 +346,7 @@ if not st.session_state.get("mueen_access_token"):
     language = st.session_state["mueen_language"]
     is_arabic = language == "العربية"
 
-    # اتجاه الواجهة بحسب اللغة المختارة
+        # اتجاه الواجهة بحسب اللغة المختارة
     direction = "rtl" if is_arabic else "ltr"
     text_align = "right" if is_arabic else "left"
 
@@ -356,43 +356,40 @@ if not st.session_state.get("mueen_access_token"):
         .main {{
             direction: {direction};
         }}
+
         .main h1, .main h2, .main h3,
         .main p, .main label,
         .main div[data-testid="stMarkdownContainer"] {{
             text-align: {text_align};
         }}
-        
 
-/* تقليل المسافات بين العناصر */
-div[data-testid="stVerticalBlock"] {
-    gap: 0.45rem !important;
-}
+        /* تقليل المسافات بين العناصر */
+        div[data-testid="stVerticalBlock"] {{
+            gap: 0.45rem !important;
+        }}
 
-/* تقليل ارتفاع حقول الإدخال */
-div[data-testid="stTextInput"] input {
-    min-height: 38px !important;
-    height: 38px !important;
-}
+        /* تقليل ارتفاع حقول الإدخال */
+        div[data-testid="stTextInput"] input {{
+            min-height: 38px !important;
+            height: 38px !important;
+        }}
 
-/* تقليل ارتفاع زر الدخول */
-div[data-testid="stButton"] button {
-    min-height: 40px !important;
-    padding: 6px 14px !important;
-}
+        /* تقليل ارتفاع زر الدخول */
+        div[data-testid="stButton"] button {{
+            min-height: 40px !important;
+            padding: 6px 14px !important;
+        }}
 
-/* تقليل المسافة حول العناوين */
-h1, h2, h3 {
-    margin-top: 0.3rem !important;
-    margin-bottom: 0.3rem !important;
-}
-
-/* ضبط المسافة أسفل الفقرات */
+        /* تقليل المسافة حول العناوين */
+        h1, h2, h3 {{
+            margin-top: 0.3rem !important;
+            margin-bottom: 0.3rem !important;
+        }}
 
         </style>
         """,
         unsafe_allow_html=True
     )
-
     # تصميم تسجيل الدخول فقط — لا يؤثر على الصفحات بعد تسجيل الدخول
         # ==========================================
     # MUEEN AI - PROFESSIONAL LOGIN DESIGN
