@@ -387,9 +387,7 @@ h1, h2, h3 {
 }
 
 /* ضبط المسافة أسفل الفقرات */
-p {
-    margin-bottom: 0.35rem !important;
-}
+
         </style>
         """,
         unsafe_allow_html=True
