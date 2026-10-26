@@ -2902,13 +2902,31 @@ with mueen_page(5):
                 )
                 st.code(str(e)[:1000])
 
-        if st.session_state.get("last_plan"):
-            skill_title = st.session_state.get("last_skill", "")
-            plan_text = st.session_state["last_plan"]
+                        st.markdown(
+                    """
+                    <style>
+                    div[data-testid="stMarkdownContainer"] {
+                        direction: rtl;
+                        text-align: right;
+                    }
 
-            st.markdown("#### 📘 الخطة العلاجية: " + skill_title)
+                    div[data-testid="stMarkdownContainer"] ol,
+                    div[data-testid="stMarkdownContainer"] ul {
+                        direction: rtl;
+                        padding-right: 30px;
+                        padding-left: 0;
+                    }
 
-            with st.container(border=True):
+                    div[data-testid="stMarkdownContainer"] li {
+                        text-align: right;
+                        line-height: 1.9;
+                        margin-bottom: 8px;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True
+                )
+
                 st.markdown(plan_text)
 
             st.download_button(
