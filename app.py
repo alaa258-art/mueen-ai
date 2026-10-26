@@ -361,12 +361,7 @@ if not st.session_state.get("mueen_access_token"):
         .main div[data-testid="stMarkdownContainer"] {{
             text-align: {text_align};
         }}
-        /* MUEEN AI - Compact Login Layout */
-
-.block-container {
-    padding-top: 0.8rem !important;
-    padding-bottom: 0.5rem !important;
-}
+        
 
 /* تقليل المسافات بين العناصر */
 div[data-testid="stVerticalBlock"] {
