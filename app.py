@@ -2902,33 +2902,21 @@ with mueen_page(5):
                 )
                 st.code(str(e)[:1000])
 
-                        st.markdown(
-                    """
-                    <style>
-                    div[data-testid="stMarkdownContainer"] {
-                        direction: rtl;
-                        text-align: right;
-                    }
+        # عرض الخطة العلاجية بعد إنشائها
+        if st.session_state.get("last_plan"):
 
-                    div[data-testid="stMarkdownContainer"] ol,
-                    div[data-testid="stMarkdownContainer"] ul {
-                        direction: rtl;
-                        padding-right: 30px;
-                        padding-left: 0;
-                    }
+            skill_title = st.session_state.get("last_skill", "")
+            plan_text = st.session_state["last_plan"]
 
-                    div[data-testid="stMarkdownContainer"] li {
-                        text-align: right;
-                        line-height: 1.9;
-                        margin-bottom: 8px;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
+            st.markdown(
+                "#### 📘 الخطة العلاجية: " + skill_title
+            )
 
+            # عرض الخطة داخل بطاقة منظمة
+            with st.container(border=True):
                 st.markdown(plan_text)
 
+            # تنزيل الخطة
             st.download_button(
                 "📥 تنزيل الخطة العلاجية TXT",
                 plan_text,
@@ -2936,6 +2924,7 @@ with mueen_page(5):
                 "text/plain",
                 use_container_width=True
             )
+
         st.markdown("### 4) إنشاء اختبار متابعة")
         st.markdown("### 4) إنشاء اختبار متابعة")
         if st.button("📝 إنشاء اختبار متابعة من 5 أسئلة",use_container_width=True):
