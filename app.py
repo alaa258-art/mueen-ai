@@ -2798,62 +2798,38 @@ with mueen_page(5):
         st.metric("متوسط الإتقان القبلي للمهارة",f"{mastery:.1f}%")
         notes=st.text_area("ملاحظات المعلم (اختياري)",placeholder="مثال: يحتاج بعض الطلاب إلى مثال بصري لترتيب الخطوات.")
         group=st.selectbox("الفئة المستهدفة",["مجموعة دعم","مجموعة الصف","مجموعة إثراء"])
-        st.markdown("### 3) إنشاء خطة علاجية")
-        if st.button("✨ إنشاء خطة بالذكاء الاصطناعي",type="primary",use_container_width=True):
+                 st.markdown("### 3) إنشاء خطة علاجية")
+
+        if st.button(
+            "✨ إنشاء خطة بالذكاء الاصطناعي",
+            type="primary",
+            use_container_width=True
+        ):
             try:
                 with st.spinner("يُعد مُعين الخطة..."):
-                    st.session_state["last_plan"]=create_plan(model,subject,grade,skill,mastery,output_language,notes,group)
-                    st.session_state["last_skill"]=skill
+                    st.session_state["last_plan"] = create_plan(
+                        model,
+                        subject,
+                        grade,
+                        skill,
+                        mastery,
+                        output_language,
+                        notes,
+                        group
+                    )
+                    st.session_state["last_skill"] = skill
+
             except Exception as e:
-                st.error("تعذر إنشاء الخطة. تحقق من المفتاح والفوترة وإتاحة النموذج."); st.code(str(e)[:1000])
-                        if st.session_state.get("last_plan"):
+                st.error(
+                    "تعذر إنشاء الخطة. تحقق من المفتاح والفوترة وإتاحة النموذج."
+                )
+                st.code(str(e)[:1000])
+
+        if st.session_state.get("last_plan"):
             skill_title = st.session_state.get("last_skill", "")
             plan_text = st.session_state["last_plan"]
 
-            # تنسيق الخطة العلاجية
-            st.markdown("""
-            <style>
-            @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
-
-            .mueen-plan-title {
-                background: linear-gradient(110deg, #10243A, #087E8B);
-                color: white !important;
-                border-radius: 14px;
-                padding: 18px 24px;
-                margin: 15px 0;
-                font-family: 'Tajawal', Arial, sans-serif;
-                font-size: 24px;
-                font-weight: 800;
-                direction: rtl;
-                text-align: right;
-            }
-
-            div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] {
-                direction: rtl;
-                text-align: right;
-                font-family: 'Tajawal', Arial, sans-serif !important;
-            }
-
-            div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] ol,
-            div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] ul {
-                direction: rtl;
-                padding-right: 28px !important;
-                padding-left: 0 !important;
-            }
-
-            div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] li {
-                text-align: right;
-                margin-bottom: 10px;
-                font-size: 17px;
-                line-height: 1.9;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-
-            st.markdown(
-                f'<div class="mueen-plan-title">📘 الخطة العلاجية: {skill_title}</div>',
-                unsafe_allow_html=True
-            )
+            st.markdown("#### 📘 الخطة العلاجية: " + skill_title)
 
             with st.container(border=True):
                 st.markdown(plan_text)
@@ -2865,7 +2841,6 @@ with mueen_page(5):
                 "text/plain",
                 use_container_width=True
             )
-
         st.markdown("### 4) إنشاء اختبار متابعة")
         st.markdown("### 4) إنشاء اختبار متابعة")
         if st.button("📝 إنشاء اختبار متابعة من 5 أسئلة",use_container_width=True):
