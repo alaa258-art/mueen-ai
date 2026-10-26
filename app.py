@@ -553,6 +553,58 @@ if not st.session_state.get("mueen_access_token"):
             padding: 20px !important;
         }
     }
+    /* ==========================================
+   MUEEN AI - COMPACT LOGIN PAGE
+   ========================================== */
+
+@media (min-width: 641px) {
+
+    .block-container {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+
+    .mueen-login-hero {
+        padding: 20px 30px !important;
+        margin: 4px 0 12px !important;
+    }
+
+    .mueen-login-hero .icon {
+        font-size: 34px !important;
+        margin-bottom: 4px !important;
+    }
+
+    .mueen-login-hero h1 {
+        font-size: 38px !important;
+        line-height: 1.2 !important;
+    }
+
+    .mueen-login-hero p {
+        font-size: 17px !important;
+        margin-top: 4px !important;
+    }
+
+    .stApp h3 {
+        font-size: 24px !important;
+        margin-top: 4px !important;
+        margin-bottom: 4px !important;
+    }
+
+    div[data-testid="stForm"] {
+        padding: 20px !important;
+    }
+
+    div[data-testid="stForm"] input {
+        min-height: 42px !important;
+        height: 42px !important;
+        padding: 8px 12px !important;
+    }
+
+    div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button {
+        min-height: 44px !important;
+        font-size: 17px !important;
+    }
+}
     </style>
     """, unsafe_allow_html=True)
 
