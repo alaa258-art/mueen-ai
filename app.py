@@ -2145,17 +2145,17 @@ if db_client and st.session_state.get("mueen_active_page") in (1, 2, 3, 4):
                         active_school_name = html.escape(
                             str(selected_school.get("name", "المدرسة"))
                         )
-# V6.5 - تحديد السنة الدراسية الحالية
-report_now = datetime.now(ZoneInfo("Asia/Dubai"))
+                        # V6.5 - تحديد السنة الدراسية الحالية
+                        report_now = datetime.now(ZoneInfo("Asia/Dubai"))
 
-if report_now.month >= 8:
-    academic_start_year = report_now.year
-else:
-    academic_start_year = report_now.year - 1
+                        if report_now.month >= 8:
+                            academic_start_year = report_now.year
+                        else:
+                            academic_start_year = report_now.year - 1
 
-report_academic_year = (
-    f"{academic_start_year}-{academic_start_year + 1}"
-)
+                        report_academic_year = (
+                            f"{academic_start_year}-{academic_start_year + 1}"
+                        )
                         safe_skills = []
                         for _, row in report_skills.sort_values(
                             "متوسط_الإتقان"
