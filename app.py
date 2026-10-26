@@ -367,54 +367,183 @@ if not st.session_state.get("mueen_access_token"):
     )
 
     # تصميم تسجيل الدخول فقط — لا يؤثر على الصفحات بعد تسجيل الدخول
+        # ==========================================
+    # MUEEN AI - PROFESSIONAL LOGIN DESIGN
+    # ==========================================
+
     st.markdown("""
     <style>
-    .block-container {padding-top: 3.6rem !important; max-width: 1080px !important;}
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800&display=swap');
+
+    /* خلفية صفحة تسجيل الدخول */
+    .stApp {
+        background:
+            radial-gradient(circle at 12% 18%, rgba(8,126,139,.10), transparent 32%),
+            radial-gradient(circle at 88% 80%, rgba(217,164,65,.09), transparent 28%),
+            linear-gradient(135deg, #F8FBFF 0%, #EDF5F9 55%, #F5F8FC 100%);
+    }
+
+    /* الخطوط */
+    .stApp,
+    .stApp input,
+    .stApp button,
+    .stApp label,
+    .stApp p {
+        font-family: 'Tajawal', 'Segoe UI', Arial, sans-serif !important;
+    }
+
+    /* مساحة الصفحة */
+    .block-container {
+        max-width: 820px !important;
+        padding-top: 3rem !important;
+        padding-bottom: 2rem !important;
+    }
+
+    /* بطاقة هوية مُعين */
     .mueen-login-hero {
-        background: linear-gradient(120deg,#10243A 0%,#17465B 52%,#087E8B 100%);
-        border-radius: 18px; padding: 24px 26px; margin: 6px 0 20px;
-        border-bottom: 4px solid #D9A441; text-align: center;
-        box-shadow: 0 8px 24px rgba(16,36,58,.12);
+        background: linear-gradient(125deg, #10243A 0%, #14536B 55%, #087E8B 100%);
+        border-radius: 24px;
+        padding: 38px 30px;
+        margin: 12px 0 28px;
+        text-align: center;
+        border-bottom: 5px solid #D9A441;
+        box-shadow: 0 18px 40px rgba(16,36,58,.18);
     }
-    .mueen-login-hero h1 {color: #fff !important; margin: 4px 0 !important;
-        font-size: clamp(26px,3vw,36px) !important; text-align:center !important;}
-    .mueen-login-hero p {color: #E8F4F5 !important; margin: 4px 0;
-        text-align:center !important; font-size:15px;}
-    .mueen-login-hero .icon {font-size: 32px;}
+
+    .mueen-login-hero .icon {
+        font-size: 46px;
+        margin-bottom: 12px;
+    }
+
+    .mueen-login-hero h1 {
+        color: #FFFFFF !important;
+        font-size: clamp(34px, 4vw, 48px) !important;
+        font-weight: 800 !important;
+        line-height: 1.5 !important;
+        text-align: center !important;
+        margin: 0 !important;
+    }
+
+    .mueen-login-hero p {
+        color: #E7F7F8 !important;
+        font-size: 20px !important;
+        font-weight: 500 !important;
+        text-align: center !important;
+        margin-top: 8px !important;
+    }
+
+    /* عنوان تسجيل الدخول */
+    .stApp h3 {
+        color: #10243A !important;
+        font-size: 29px !important;
+        font-weight: 800 !important;
+    }
+
+    /* النصوص التوضيحية */
+    .stCaptionContainer,
+    [data-testid="stCaptionContainer"] {
+        font-size: 16px !important;
+        color: #526779 !important;
+    }
+
+    /* نموذج تسجيل الدخول */
     div[data-testid="stForm"] {
-        background: #FFFFFF !important; border: 1px solid #D8E3EB !important;
-        border-radius: 16px !important; padding: 22px !important;
-        box-shadow: 0 8px 24px rgba(16,36,58,.07);
+        background: #FFFFFF !important;
+        border: 1px solid #DCE8EF !important;
+        border-radius: 22px !important;
+        padding: 32px !important;
+        box-shadow: 0 14px 38px rgba(16,36,58,.10);
     }
-    div[data-testid="stForm"] div[data-testid="stTextInput"] input {
-        background-color: #FFFFFF !important; color: #10243A !important;
+
+    /* أسماء الحقول */
+    div[data-testid="stForm"] label,
+    div[data-testid="stForm"] label p {
+        font-size: 18px !important;
+        font-weight: 700 !important;
+        color: #10243A !important;
+    }
+
+    /* حقول الإدخال */
+    div[data-testid="stForm"] input {
+        background: #F9FCFF !important;
+        color: #10243A !important;
         -webkit-text-fill-color: #10243A !important;
-        border: 1px solid #AABBC9 !important; border-radius: 10px !important;
-        min-height: 46px !important; font-size: 16px !important;
+        border: 1.5px solid #B9CDD9 !important;
+        border-radius: 12px !important;
+        min-height: 54px !important;
+        font-size: 18px !important;
+        padding: 12px 15px !important;
     }
-    div[data-testid="stForm"] div[data-testid="stTextInput"] input:focus {
+
+    /* التركيز على الحقول */
+    div[data-testid="stForm"] input:focus {
         border: 2px solid #087E8B !important;
-        box-shadow: 0 0 0 3px rgba(8,126,139,.14) !important;
+        box-shadow: 0 0 0 4px rgba(8,126,139,.12) !important;
     }
-    div[data-testid="stForm"] div[data-testid="stTextInput"] label {
-        color: #10243A !important; font-weight: 700 !important;
+
+    /* زر تسجيل الدخول */
+    div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button {
+        background: linear-gradient(100deg, #087E8B, #096578) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 12px !important;
+        min-height: 55px !important;
+        font-size: 19px !important;
+        font-weight: 800 !important;
+        box-shadow: 0 6px 18px rgba(8,126,139,.22);
+        transition: all .2s ease;
     }
-    div[data-testid="stForm"] button[kind="secondaryFormSubmit"],
-    div[data-testid="stForm"] button[kind="primaryFormSubmit"],
-    div[data-testid="stForm"] button[data-testid="stFormSubmitButton"] {
-        background: #087E8B !important; color: #fff !important;
-        border-radius: 10px !important; min-height: 45px !important;
+
+    div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button:hover {
+        background: linear-gradient(100deg, #096578, #10243A) !important;
+        transform: translateY(-1px);
+    }
+
+    /* اختيار اللغة */
+    div[data-testid="stSelectbox"] label p {
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        color: #10243A !important;
+    }
+
+    /* تحسين عرض الهاتف */
+    @media (max-width: 640px) {
+        .block-container {
+            padding: 1.5rem 1rem !important;
+        }
+
+        .mueen-login-hero {
+            padding: 26px 16px;
+            border-radius: 18px;
+        }
+
+        .mueen-login-hero h1 {
+            font-size: 30px !important;
+        }
+
+        .mueen-login-hero p {
+            font-size: 16px !important;
+        }
+
+        div[data-testid="stForm"] {
+            padding: 20px !important;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
 
     # شاشة دخول مختصرة بهوية مُعين
+        # شاشة دخول احترافية بهوية مُعين
     st.markdown(
         f"""
-        <div class="mueen-login-hero">
+        <div class="mueen-login-hero" dir="{'rtl' if is_arabic else 'ltr'}">
             <div class="icon">🎓</div>
             <h1>مُعين | MUEEN AI</h1>
-            <p>{"مساعدك الذكي لتحسين نواتج التعلم" if is_arabic else "Your AI Assistant for Better Learning Outcomes"}</p>
+            <p>{
+                "منصة الذكاء الاصطناعي لتحسين نواتج التعلم"
+                if is_arabic
+                else "AI-Powered Learning Improvement Platform"
+            }</p>
         </div>
         """,
         unsafe_allow_html=True
