@@ -22,9 +22,8 @@ st.markdown("""
 
 /* مساحة المحتوى */
 .block-container {
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-    max-width: 1440px;
+    padding-top: 2rem !important;
+    padding-bottom: 0.5rem !important;
 }
 
 /* العناوين */
