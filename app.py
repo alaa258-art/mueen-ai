@@ -2806,9 +2806,108 @@ with mueen_page(5):
                     st.session_state["last_skill"]=skill
             except Exception as e:
                 st.error("تعذر إنشاء الخطة. تحقق من المفتاح والفوترة وإتاحة النموذج."); st.code(str(e)[:1000])
-        if st.session_state.get("last_plan"):
-            st.markdown("#### الخطة العلاجية: "+st.session_state.get("last_skill","")); st.markdown(st.session_state["last_plan"])
-            st.download_button("تنزيل الخطة TXT",st.session_state["last_plan"],"mueen_learning_plan.txt","text/plain")
+                if st.session_state.get("last_plan"):
+
+            st.markdown("""
+            <style>
+            @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800&display=swap');
+
+            .mueen-plan-title {
+                background: linear-gradient(110deg, #10243A, #087E8B);
+                color: #FFFFFF !important;
+                border-radius: 14px;
+                padding: 20px 24px;
+                margin: 20px 0 16px;
+                font-family: 'Tajawal', Arial, sans-serif;
+                font-size: 25px;
+                font-weight: 800;
+                text-align: right;
+                direction: rtl;
+                border-right: 5px solid #D9A441;
+            }
+
+            .mueen-plan-content {
+                background: #FFFFFF;
+                border: 1px solid #DCE8EF;
+                border-radius: 16px;
+                padding: 26px 30px;
+                margin-bottom: 18px;
+                box-shadow: 0 8px 26px rgba(16,36,58,.08);
+                font-family: 'Tajawal', Arial, sans-serif;
+                font-size: 18px;
+                line-height: 2;
+                color: #10243A;
+                direction: rtl;
+                text-align: right;
+                overflow-wrap: anywhere;
+            }
+
+            .mueen-plan-content p,
+            .mueen-plan-content li {
+                font-size: 18px;
+                line-height: 2;
+                text-align: right;
+            }
+
+            .mueen-plan-content ol,
+            .mueen-plan-content ul {
+                direction: rtl;
+                text-align: right;
+                padding-right: 28px;
+                padding-left: 0;
+            }
+
+            .mueen-plan-content li {
+                padding-right: 6px;
+                margin-bottom: 12px;
+            }
+
+            @media (max-width: 640px) {
+                .mueen-plan-content {
+                    padding: 18px;
+                    font-size: 16px;
+                }
+            }
+            /* تنسيق نص الخطة داخل حاوية Streamlit */
+div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] {
+    direction: rtl;
+    text-align: right;
+    font-family: 'Tajawal', Arial, sans-serif !important;
+    font-size: 18px !important;
+    line-height: 1.9 !important;
+}
+
+div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] ol,
+div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] ul {
+    direction: rtl;
+    padding-right: 28px !important;
+    padding-left: 0 !important;
+}
+
+div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] li {
+    text-align: right;
+    margin-bottom: 10px;
+}
+            </style>
+            """, unsafe_allow_html=True)
+
+            skill_title = st.session_state.get("last_skill", "")
+
+            st.markdown(
+                f'<div class="mueen-plan-title">📘 الخطة العلاجية: {skill_title}</div>',
+                unsafe_allow_html=True
+            )
+
+            with st.container(border=True):
+                st.markdown(st.session_state["last_plan"])
+
+            st.download_button(
+                "📥 تنزيل الخطة العلاجية TXT",
+                st.session_state["last_plan"],
+                "mueen_learning_plan.txt",
+                "text/plain",
+                use_container_width=True
+            )
         st.markdown("### 4) إنشاء اختبار متابعة")
         if st.button("📝 إنشاء اختبار متابعة من 5 أسئلة",use_container_width=True):
             try:
