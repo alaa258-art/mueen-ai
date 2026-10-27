@@ -3113,6 +3113,88 @@ with mueen_page(5):
         st.metric("متوسط الإتقان القبلي للمهارة",f"{mastery:.1f}%")
         notes=st.text_area("ملاحظات المعلم (اختياري)",placeholder="مثال: يحتاج بعض الطلاب إلى مثال بصري لترتيب الخطوات.")
         group=st.selectbox("الفئة المستهدفة",["مجموعة دعم","مجموعة الصف","مجموعة إثراء"])
+        # MUEEN V4.1 — دورة تدخل ذكي من بيانات التقييم الحالية، دون حفظ تلقائي.
+        st.markdown("### 🚀 دورة التدخل الذكي | MUEEN Agent")
+        st.caption("يشخّص المهارة الأضعف ويُنشئ الخطة والاختبار للمراجعة؛ لا تُرسل أسماء الطلاب إلى النموذج.")
+        agent_weak = summary.sort_values(["AverageMastery", "Skill"], ascending=[True, True]).iloc[0]
+        agent_skill = str(agent_weak["Skill"])
+        agent_mastery = float(agent_weak["AverageMastery"])
+        st.info(
+            f"🔎 الأولوية المقترحة: {agent_skill} — متوسط الإتقان {agent_mastery:.1f}% "
+            f"(حد الإتقان {threshold}%)."
+        )
+        if st.button("🚀 ابدأ دورة التدخل الذكي", key="mueen_agent_start", use_container_width=True):
+            if agent_mastery >= threshold:
+                st.warning("جميع المهارات بلغت حد الإتقان؛ لا توجد مهارة متعثرة تستدعي تدخلًا علاجيًا وفق هذه البيانات.")
+            elif not get_key():
+                st.error("مفتاح OpenAI غير متاح؛ تعذّر بدء الدورة.")
+            else:
+                # لا نحتفظ بمخرجات دورة قديمة إذا فشل إنشاء إحدى المرحلتين.
+                st.session_state.pop("mueen_agent_cycle", None)
+                try:
+                    with st.spinner("الوكيل يحلل الأولوية وينشئ الخطة واختبار المتابعة..."):
+                        agent_plan = create_plan(
+                            model, plan_subject, plan_grade, agent_skill,
+                            agent_mastery, output_language, notes, group, threshold
+                        )
+                        agent_quiz = create_quiz(
+                            model, plan_subject, plan_grade, agent_skill, output_language
+                        )
+                    st.session_state["mueen_agent_cycle"] = {
+                        "school_id": get_selected_school_id(),
+                        "subject": plan_subject, "grade": plan_grade,
+                        "skill": agent_skill, "before": agent_mastery,
+                        "threshold": threshold, "plan": agent_plan,
+                        "quiz": agent_quiz, "language": output_language,
+                        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    }
+                    st.session_state["last_plan"] = agent_plan
+                    st.session_state["last_skill"] = agent_skill
+                    st.session_state["last_quiz"] = agent_quiz
+                    st.session_state["quiz_skill"] = agent_skill
+                    st.success("اكتملت مرحلتا التخطيط وإعداد الاختبار. راجع المخرجات قبل استخدامها.")
+                except Exception as e:
+                    st.error("لم تكتمل الدورة؛ لم تُحفظ أي سجلات في قاعدة البيانات.")
+                    st.caption(str(e)[:500])
+        agent_cycle = st.session_state.get("mueen_agent_cycle")
+        if agent_cycle and agent_cycle.get("school_id") == get_selected_school_id():
+            st.markdown("#### 🧠 ملخص دورة التدخل الذكي")
+            st.write(
+                f"**المادة:** {agent_cycle['subject']} | **الصف:** {agent_cycle['grade']} | "
+                f"**المهارة:** {agent_cycle['skill']} | "
+                f"**القبلي:** {agent_cycle['before']:.1f}% | "
+                f"**المستهدف:** {agent_cycle['threshold']}%"
+            )
+            st.caption("المرحلة الحالية: بانتظار تطبيق النشاط وإدخال نتيجة اختبار المتابعة بواسطة المعلم.")
+            with st.expander("📘 عرض الخطة التي أنشأها الوكيل"):
+                st.markdown(agent_cycle["plan"])
+            with st.expander("📝 عرض اختبار المتابعة ومفتاح الإجابة"):
+                st.markdown(agent_cycle["quiz"])
+            st.download_button("📥 تنزيل خطة الوكيل", agent_cycle["plan"], "mueen_agent_plan.txt", key="mueen_agent_plan_download")
+            st.download_button("📥 تنزيل اختبار الوكيل", agent_cycle["quiz"], "mueen_agent_quiz.txt", key="mueen_agent_quiz_download")
+            agent_after = st.number_input(
+                "نتيجة التقييم البعدي للدورة (%) — بعد تطبيق الاختبار",
+                min_value=0.0, max_value=100.0, value=0.0, step=1.0,
+                key="mueen_agent_after"
+            )
+            if st.button("📊 تحليل نتيجة الدورة واقتراح الخطوة التالية", key="mueen_agent_decide"):
+                agent_recommendation, agent_delta = decide(
+                    agent_cycle["before"], agent_after, agent_cycle["threshold"]
+                )
+                st.session_state["mueen_agent_decision"] = {
+                    "school_id": agent_cycle["school_id"],
+                    "skill": agent_cycle["skill"], "before": agent_cycle["before"],
+                    "after": agent_after, "delta": agent_delta,
+                    "recommendation": agent_recommendation,
+                }
+            agent_decision = st.session_state.get("mueen_agent_decision")
+            if (agent_decision and agent_decision["school_id"] == agent_cycle["school_id"]
+                    and agent_decision["skill"] == agent_cycle["skill"]
+                    and agent_decision["before"] == agent_cycle["before"]):
+                st.metric("التغير في الإتقان", f"{agent_decision['delta']:+.1f} نقطة مئوية")
+                st.info(agent_decision["recommendation"])
+                st.caption("هذه توصية مبدئية وليست قرارًا نهائيًا؛ لا يتم حفظ النتيجة تلقائيًا.")
+
         st.markdown("### 3) إنشاء خطة علاجية")
 
         if st.button(
@@ -3196,7 +3278,7 @@ with mueen_page(5):
         if st.button("📝 إنشاء اختبار متابعة من 5 أسئلة",use_container_width=True):
             try:
                 with st.spinner("يُنشئ مُعين الاختبار..."):
-                    st.session_state["last_quiz"]=create_quiz(model,subject,grade,skill,output_language)
+                    st.session_state["last_quiz"]=create_quiz(model,plan_subject,plan_grade,skill,output_language)
                     st.session_state["quiz_skill"]=skill
             except Exception as e:
                 st.error("تعذر إنشاء الاختبار. تحقق من إعدادات API."); st.code(str(e)[:1000])
