@@ -104,7 +104,7 @@ def create_plan(model, subject, grade, skill, mastery, output_language, notes, g
 إذا كانت اللغة العربية، فاكتب الخطة العلاجية كلها باللغة العربية.
 أنت وكيل دعم تعلم يساعد المعلم وليس بديلًا عنه. أنشئ خطة علاجية عملية باللغة {output_language}.
 المادة: {subject}؛ الصف: {grade}؛ المهارة: {skill}؛ متوسط الإتقان: {mastery:.1f}%؛ الفئة: {group}؛ ملاحظات المعلم: {notes or 'لا توجد'}.
-نظّم الإجابة: 1) تفسير حذر للنتيجة دون افتراض أسباب غير مثبتة. 2) هدف قابل للقياس. 3) شرح مبسط. 4) مثال محلول. 5) نشاط علاجي 10 دقائق. 6) خمسة أسئلة متابعة مع الإجابات. 7) معيار إتقان مقترح 80% أو وفق إعداد المعلم. 8) بديل إذا لم يتحقق الإتقان. 9) الخطوة التالية بعد التقييم البعدي. لا تشخّص طبيًا أو نفسيًا، واجعل المعلم صاحب القرار."""
+اجعل المثال المحلول والنشاط العلاجي مرتبطين مباشرة بالمادة والمهارة المحددتين؛ في الحوسبة استخدم مثالًا حاسوبيًا أو خوارزمية مناسبة للعمر، ولا تستخدم إعداد الطعام أو الشاي. اكتب كل عنوان من العناوين التسعة في سطر مستقل، واكتب الخطوات المرقمة بالشكل 1. خطوة، 2. خطوة، والأسئلة مع إجاباتها في أسطر منفصلة. فرّق بين نسبة إتقان الفرد ونسبة الطلاب الذين يحققون الإتقان، ولا تستنتج أسبابًا غير مثبتة. نظّم الإجابة: 1) تفسير حذر للنتيجة دون افتراض أسباب غير مثبتة. 2) هدف قابل للقياس. 3) شرح مبسط. 4) مثال محلول. 5) نشاط علاجي 10 دقائق. 6) خمسة أسئلة متابعة مع الإجابات. 7) معيار إتقان مقترح 80% أو وفق إعداد المعلم. 8) بديل إذا لم يتحقق الإتقان. 9) الخطوة التالية بعد التقييم البعدي. لا تشخّص طبيًا أو نفسيًا، واجعل المعلم صاحب القرار."""
     return ai(model, prompt)
 
 
@@ -2758,48 +2758,57 @@ button.secondary {{ background: var(--navy); }}
 elif not db_client and st.session_state.get("mueen_active_page") in (1, 2, 3, 4):
     st.info("فعّل اتصال Supabase لعرض لوحة المتابعة المحفوظة.")
 
-# تنسيق بطاقات الخطة العلاجية فقط؛ لا يؤثر في بقية صفحات مُعين.
+# تصميم V2 محصور في بطاقات الخطة العلاجية فقط.
 st.markdown("""
 <style>
 [class*="st-key-mueen_plan_card_"] {
-    background: #FFFFFF;
-    border: 1px solid #D9E6EE !important;
-    border-radius: 17px !important;
-    box-shadow: 0 5px 18px rgba(16,36,58,.055);
-    padding: 12px 18px !important;
-    margin-bottom: 10px;
+    background:#fff !important; border:1px solid #d8e6ef !important;
+    border-radius:18px !important; padding:20px 24px !important;
+    box-shadow:0 5px 20px rgba(16,36,58,.06); margin-bottom:14px;
 }
-[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] {
-    font-family: 'Tajawal','Segoe UI',Arial,sans-serif;
-    font-size: 17px;
-    line-height: 1.9;
-    overflow-wrap: break-word;
-}
-[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] p {
-    line-height: 1.9;
-    margin: .35rem 0 .7rem;
-}
-[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] ul,
-[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] ol {
-    padding-inline-start: 1.6rem;
-    margin: .5rem 0;
-}
-[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] li {
-    padding-inline-start: .2rem;
-    margin-bottom: .45rem;
-}
-[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] li::marker {
-    color: #087E8B;
-    font-weight: 800;
-}
-[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] h4 {
-    color: #10243A;
-    font-weight: 800;
-    margin: 0 0 .45rem;
-    font-size: 20px;
-}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2 {font-family:'Tajawal','Segoe UI',Arial,sans-serif; font-size:18px; line-height:2; color:#183248; overflow-wrap:anywhere;}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-head {background:#edf8fa; border-inline-start:5px solid #087e8b; border-radius:11px; padding:10px 16px; margin-bottom:16px; color:#075e69; font-size:21px; font-weight:800;}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body {padding:0 8px 5px;}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body p {margin:0 0 13px; font-size:18px; line-height:2;}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body ul,
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body ol {margin:8px 0 16px; padding-inline-start:32px; list-style-position:outside;}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body li {font-size:18px; line-height:1.95; padding-inline-start:7px; margin-bottom:9px;}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body li::marker {color:#087e8b; font-weight:800;}
+@media(max-width:700px){[class*="st-key-mueen_plan_card_"]{padding:13px 14px !important;} [class*="st-key-mueen_plan_card_"] .mueen-plan-v2{font-size:16px;} [class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body p,[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body li{font-size:16px;} }
 </style>
 """, unsafe_allow_html=True)
+
+
+def render_mueen_plan_body(section_text):
+    """تحويل نص الخطة إلى فقرات وقوائم HTML آمنة دون تعديل النص المحفوظ."""
+    lines = section_text.splitlines()
+    result = []
+    list_kind = None
+    def close_list():
+        nonlocal list_kind
+        if list_kind:
+            result.append(f"</{list_kind}>")
+            list_kind = None
+    for raw in lines:
+        line = raw.strip()
+        if not line:
+            close_list()
+            continue
+        numbered = re.match(r"^(?:\d+|[٠-٩]+)[.)\-]\s+(.+)$", line)
+        bullet = re.match(r"^[-•*]\s+(.+)$", line)
+        kind = 'ol' if numbered else 'ul' if bullet else None
+        if kind:
+            if list_kind != kind:
+                close_list()
+                result.append(f"<{kind}>")
+                list_kind = kind
+            value = numbered.group(1) if numbered else bullet.group(1)
+            result.append(f"<li>{html.escape(value)}</li>")
+        else:
+            close_list()
+            result.append(f"<p>{html.escape(line)}</p>")
+    close_list()
+    return ''.join(result)
 
 
 def split_mueen_plan_sections(plan_text, is_arabic=True):
@@ -3070,23 +3079,20 @@ with mueen_page(5):
                 plan_sections = [(None, plan_text)]
 
             for card_index, (section_number, section_text) in enumerate(plan_sections):
+                if section_number is not None:
+                    icon, title, _ = plan_headings[section_number]
+                    card_title = f'<div class="mueen-plan-v2-head">{icon} {html.escape(title)}</div>'
+                else:
+                    card_title = ""
+                card_html = (
+                    f'<section class="mueen-plan-v2" dir="{plan_direction}">'
+                    + card_title
+                    + '<div class="mueen-plan-v2-body">'
+                    + render_mueen_plan_body(section_text)
+                    + '</div></section>'
+                )
                 with st.container(border=True, key=f"mueen_plan_card_{card_index}"):
-                    st.markdown(
-                        f'<div dir="{plan_direction}" style="text-align:{"right" if plan_is_arabic else "left"};">'
-                        + (
-                            f'<h4 style="color:#087E8B;font-size:21px;margin:0 0 8px;font-weight:800">'
-                            f'{plan_headings[section_number][0]} {html.escape(plan_headings[section_number][1])}</h4>'
-                            if section_number is not None else ""
-                        ) + '</div>',
-                        unsafe_allow_html=True,
-                    )
-                    # النص Markdown يبقى نصًا آمنًا، مع اتجاه مناسب للغة.
-                    st.markdown(
-                        f'<div dir="{plan_direction}" style="text-align:{"right" if plan_is_arabic else "left"};">'
-                        + html.escape(section_text).replace("\n", "<br>")
-                        + '</div>',
-                        unsafe_allow_html=True,
-                    )
+                    st.markdown(card_html, unsafe_allow_html=True)
 
             # تنزيل الخطة
             st.download_button(
