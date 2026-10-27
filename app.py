@@ -773,6 +773,59 @@ with logout_col:
         st.rerun()
 st.session_state["mueen_school_id"] = selected_school["id"]
 st.session_state["mueen_school_role"] = selected_school["role"]
+# MUEEN AI — تنسيق مساحة العمل فقط، بعد نجاح تسجيل الدخول
+st.markdown("""
+<style>
+/* عرض مناسب لشاشات العرض واللجان */
+section.main .block-container,
+[data-testid="stMainBlockContainer"] {
+    max-width: 1480px !important;
+    width: 100% !important;
+    padding-left: clamp(1rem, 3vw, 3rem) !important;
+    padding-right: clamp(1rem, 3vw, 3rem) !important;
+    padding-top: 3.5rem !important;
+}
+/* مقروئية عامة للواجهة الداخلية */
+[data-testid="stMain"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stMain"] [data-testid="stWidgetLabel"] p {
+    font-size: 16px !important;
+    line-height: 1.75 !important;
+}
+[data-testid="stMain"] h1 {font-size: clamp(28px, 2.3vw, 38px) !important;}
+[data-testid="stMain"] h2 {font-size: clamp(24px, 2vw, 31px) !important;}
+[data-testid="stMain"] h3 {font-size: clamp(20px, 1.6vw, 26px) !important;}
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+}
+[data-testid="stSidebar"] {min-width: 275px;}
+/* تحسين بطاقات القياس بدون المساس بالبيانات */
+[data-testid="stMetric"] {
+    background: #fff;
+    border: 1px solid #DFE8EF;
+    border-radius: 16px;
+    padding: 16px 18px;
+    box-shadow: 0 5px 16px rgba(16,36,58,.05);
+}
+/* أزرار الانتقال لا تختصر العناوين */
+[class*="st-key-mueen_quick_"] button {
+    min-height: 56px !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    line-height: 1.4 !important;
+    padding: 9px 12px !important;
+}
+@media (max-width: 800px) {
+    [data-testid="stMainBlockContainer"] {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.caption(
     "🔒 بيانات المدرسة النشطة فقط · استخدم رموزًا مستعارة للطلاب "
     "وراجع نتائج الذكاء الاصطناعي قبل تطبيقها."
@@ -857,9 +910,9 @@ else:
     <style>
     /* أزرار التنقل المختصرة، دون تغيير ألوان البطاقات الرئيسية */
     [class*="st-key-mueen_quick_"] button {
-        min-height: 38px !important;
-        padding: 5px 6px !important;
-        font-size: 12px !important;
+        min-height: 56px !important;
+        padding: 9px 12px !important;
+        font-size: 15px !important;
         font-weight: 700 !important;
         border: 1px solid #CBD5E1 !important;
         border-radius: 9px !important;
@@ -879,17 +932,19 @@ else:
     }
     </style>
     """, unsafe_allow_html=True)
-    cols = st.columns(7, gap="small")
-    for col, (label, number) in zip(cols, nav_items):
-        with col:
-            if st.button(
-                label,
-                key=f"mueen_quick_{number}",
-                use_container_width=True,
-                type="primary" if number == active_page else "secondary",
-            ):
-                st.session_state["mueen_active_page"] = number
-                st.rerun()
+    # صفان بأسماء كاملة بدل سبعة أزرار ضيقة
+    for nav_row in (nav_items[:4], nav_items[4:]):
+        cols = st.columns(len(nav_row), gap="small")
+        for col, (label, number) in zip(cols, nav_row):
+            with col:
+                if st.button(
+                    label,
+                    key=f"mueen_quick_{number}",
+                    use_container_width=True,
+                    type="primary" if number == active_page else "secondary",
+                ):
+                    st.session_state["mueen_active_page"] = number
+                    st.rerun()
     st.caption("القسم الحالي: " + nav_items[active_page][0])
 
 with mueen_page(0):
