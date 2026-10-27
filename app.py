@@ -454,6 +454,75 @@ def mueen_v5_prior_interventions(school_id, subject_id=None, skill_id=None):
         query = query.eq("skill_id", skill_id)
     return query.order("created_at", desc=True).limit(20).execute().data or []
 
+
+# MUEEN V5.1 — فحص تكامل آمن: قراءة فقط، دون كتابة أو حذف بيانات.
+def mueen_v51_integration_audit():
+    results = []
+    def record(test, ok, detail):
+        results.append({"الاختبار": test, "النتيجة": "نجاح" if ok else "يحتاج مراجعة", "التفاصيل": str(detail)[:280]})
+
+    client = get_supabase()
+    if client is None:
+        record("جلسة Supabase", False, "لا توجد جلسة مستخدم موثقة.")
+        return results
+    try:
+        user_id = get_current_user_id(client)
+        school_id = get_selected_school_id()
+        memberships = (client.table("school_memberships")
+                       .select("school_id,role,is_active")
+                       .eq("school_id", school_id).eq("user_id", user_id)
+                       .eq("is_active", True).limit(1).execute().data or [])
+        role = str(memberships[0].get("role", "")).lower() if memberships else ""
+        record("عضوية المدرسة النشطة", bool(memberships), f"عضوية نشطة: {bool(memberships)}؛ الدور: {role or 'غير معروف'}")
+        if not memberships:
+            return results
+    except Exception as exc:
+        record("التحقق من الهوية والعضوية", False, type(exc).__name__ + ": " + str(exc)[:170])
+        return results
+
+    for table, columns in [
+        ("schools", "id,name"),
+        ("academic_sections", "id,school_id"),
+        ("academic_subjects", "id,school_id"),
+        ("students", "id,school_id,student_code"),
+        ("assessment_records", "id,school_id,student_code,skill,assessment_type,score,max_score"),
+        ("intervention_plans", "id,school_id,plan_title"),
+        ("intervention_followups", "id,school_id,intervention_plan_id"),
+    ]:
+        try:
+            query = client.table(table).select(columns).eq("school_id", school_id).limit(50) if table != "schools" else client.table(table).select(columns).eq("id", school_id).limit(1)
+            rows = query.execute().data or []
+            scoped = all(str(row.get("school_id", school_id)) == str(school_id) for row in rows)
+            record("قراءة " + table, scoped, f"{len(rows)} سجل ظاهر (حد القراءة 50). قد يكون الجدول فارغًا أو مقيدًا بـ RLS.")
+        except Exception as exc:
+            record("قراءة " + table, False, type(exc).__name__ + ": " + str(exc)[:170])
+
+    try:
+        before = pd.DataFrame([{"Student":"TEST-A","Skill":"مهارة اختبار","Score":40,"MaxScore":100}])
+        after = pd.DataFrame([{"Student":"TEST-A","Skill":"مهارة اختبار","Score":50,"MaxScore":100}])
+        matched = mueen_v5_paired(before, after, "مهارة اختبار")
+        ok = len(matched) == 1 and abs(float(matched.iloc[0]["التغير"]) - 10) < 1e-8
+        record("مطابقة التقييم القبلي والبعدي", ok, "تغير متوقع: +10 نقاط مئوية؛ بيانات محاكاة فقط.")
+    except Exception as exc:
+        record("مطابقة التقييم القبلي والبعدي", False, str(exc)[:180])
+    try:
+        recommendation, delta = decide(40, 50, 80)
+        record("قرار الوكيل عند عدم بلوغ الإتقان", delta == 10 and "تحسن" in recommendation,
+               f"التغير: {delta:+.0f}؛ {recommendation}")
+        recommendation2, delta2 = decide(40, 85, 80)
+        record("قرار الوكيل عند بلوغ الإتقان", delta2 == 45 and "إتقان" in recommendation2,
+               f"التغير: {delta2:+.0f}؛ {recommendation2}")
+    except Exception as exc:
+        record("اختبار قرارات الوكيل", False, str(exc)[:180])
+
+    record("صلاحية حفظ خطط التدخل", role in ("principal", "coordinator"),
+           "صلاحية واجهة فقط؛ لم تُجرّب كتابة فعلية. الحماية النهائية لدى RLS.")
+    record("الحفظ والاسترجاع الفعلي", False,
+           "لم ينفذ: الفحص آمن للقراءة فقط؛ لا توجد سياسة حذف مضمونة لتنظيف السجلات التجريبية.")
+    record("عزل البيانات بين مدرستين", False,
+           "لم ينفذ: يلزم حساب اختبار ثانٍ ومدرسة ثانية للتحقق من منع الوصول عبر RLS.")
+    return results
+
 # بوابة تسجيل الدخول إلى مُعين AI - عربي / English
 if "mueen_language" not in st.session_state:
     st.session_state["mueen_language"] = "العربية"
@@ -1083,6 +1152,27 @@ else:
 
 with mueen_page(0):
     st.info("مرحبًا بك في مُعين. اختر إحدى البطاقات الملونة أعلاه لفتح القسم المطلوب.")
+
+with mueen_page(6):
+    st.markdown("### 🧪 اختبار التكامل الشامل — V5.1")
+    st.caption("فحص قراءة آمن على المدرسة المختارة؛ لا يُنشئ ولا يحذف أي سجل، ولا يرسل بيانات الطلاب إلى الذكاء الاصطناعي.")
+    if st.button("🧪 تشغيل فحص التكامل الشامل", key="mueen_v51_run_audit", use_container_width=True):
+        with st.spinner("فحص الصلاحيات والقراءة والحسابات دون تعديل البيانات..."):
+            st.session_state["mueen_v51_audit"] = {
+                "school_id": get_selected_school_id(),
+                "rows": mueen_v51_integration_audit(),
+            }
+    report = st.session_state.get("mueen_v51_audit", {})
+    if report.get("school_id") == get_selected_school_id() and report.get("rows"):
+        audit_df = pd.DataFrame(report["rows"])
+        st.dataframe(audit_df, hide_index=True, use_container_width=True)
+        successes = int((audit_df["النتيجة"] == "نجاح").sum())
+        st.info(f"نجح {successes} من أصل {len(audit_df)} فحصًا. الفحوص غير المنفذة ليست إخفاقًا مثبتًا، ولا تُعد نجاحًا.")
+        st.download_button("📥 تنزيل تقرير الفحص CSV",
+            audit_df.to_csv(index=False).encode("utf-8-sig"),
+            "MUEEN_V5_1_integration_audit.csv", "text/csv",
+            key="mueen_v51_audit_download")
+        st.warning("هذا الفحص لا يثبت نجاح INSERT أو DELETE أو عزل RLS بين حسابين. لا تستخدم نتائج الاختبار دليلًا على نجاح الحفظ الفعلي.")
 
 with mueen_page(6):
     # =========================================================
