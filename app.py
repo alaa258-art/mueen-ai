@@ -2702,6 +2702,39 @@ button.secondary {{ background: var(--navy); }}
 elif not db_client and st.session_state.get("mueen_active_page") in (1, 2, 3, 4):
     st.info("فعّل اتصال Supabase لعرض لوحة المتابعة المحفوظة.")
 
+# تنسيق خاص بالخطة العلاجية فقط؛ لا يؤثر في صفحة الدخول أو بقية الأقسام.
+st.markdown("""
+<style>
+[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] {
+    font-family: 'Tajawal', 'Segoe UI', Arial, sans-serif;
+    line-height: 1.95;
+    font-size: 17px;
+    overflow-wrap: anywhere;
+}
+[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] h1,
+[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] h2,
+[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] h3 {
+    color: #10243A;
+    line-height: 1.5;
+    margin: 14px 0 8px;
+}
+[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] ol,
+[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] ul {
+    padding-inline-start: 1.8rem;
+    padding-inline-end: 0;
+    margin-block: 0.6rem;
+}
+[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] li {
+    margin-bottom: 0.5rem;
+    padding-inline-start: 0.2rem;
+}
+[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] p {
+    line-height: 1.95;
+    margin-bottom: 0.8rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
 with mueen_page(5):
     demo=pd.DataFrame([
      {"Student":"طالب 1","Skill":"فهم مفهوم الخوارزمية","Score":4,"MaxScore":5},
@@ -2912,8 +2945,16 @@ with mueen_page(5):
                 "#### 📘 الخطة العلاجية: " + skill_title
             )
 
-            # عرض الخطة داخل بطاقة منظمة
-            with st.container(border=True):
+            # عرض الخطة داخل بطاقة مستقلة مع اتجاه مناسب للغة
+            with st.container(border=True, key="mueen_plan_display"):
+                plan_direction = "rtl" if st.session_state.get("mueen_output_language", "العربية") == "العربية" else "ltr"
+                st.markdown(
+                    "<style>"
+                    f'[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] '
+                    f'{{direction:{plan_direction};text-align:{"right" if plan_direction == "rtl" else "left"};}}'
+                    "</style>",
+                    unsafe_allow_html=True,
+                )
                 st.markdown(plan_text)
 
             # تنزيل الخطة
@@ -2925,7 +2966,6 @@ with mueen_page(5):
                 use_container_width=True
             )
 
-        st.markdown("### 4) إنشاء اختبار متابعة")
         st.markdown("### 4) إنشاء اختبار متابعة")
         if st.button("📝 إنشاء اختبار متابعة من 5 أسئلة",use_container_width=True):
             try:
@@ -2974,9 +3014,6 @@ with mueen_page(5):
                 except Exception as e:
                     st.error("تعذر حفظ النتيجة. تأكد من إعداد Secrets وصلاحية الاتصال.")
                     st.caption(str(e)[:500])
-
-        st.markdown("### 6) سجل المتابعة المحفوظ")
-
 
         st.markdown("### 6) سجل المتابعة المحفوظ")
         hist_code = st.text_input("رمز الطالب/المجموعة لعرض السجل", value="", key="history_code", help="أدخل رمز الطالب أو المجموعة الذي تريد عرض سجله.")
