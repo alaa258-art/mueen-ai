@@ -2758,38 +2758,99 @@ button.secondary {{ background: var(--navy); }}
 elif not db_client and st.session_state.get("mueen_active_page") in (1, 2, 3, 4):
     st.info("فعّل اتصال Supabase لعرض لوحة المتابعة المحفوظة.")
 
-# تنسيق خاص بالخطة العلاجية فقط؛ لا يؤثر في صفحة الدخول أو بقية الأقسام.
+# تنسيق بطاقات الخطة العلاجية فقط؛ لا يؤثر في بقية صفحات مُعين.
 st.markdown("""
 <style>
-[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] {
-    font-family: 'Tajawal', 'Segoe UI', Arial, sans-serif;
-    line-height: 1.95;
+[class*="st-key-mueen_plan_card_"] {
+    background: #FFFFFF;
+    border: 1px solid #D9E6EE !important;
+    border-radius: 17px !important;
+    box-shadow: 0 5px 18px rgba(16,36,58,.055);
+    padding: 12px 18px !important;
+    margin-bottom: 10px;
+}
+[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] {
+    font-family: 'Tajawal','Segoe UI',Arial,sans-serif;
     font-size: 17px;
-    overflow-wrap: anywhere;
+    line-height: 1.9;
+    overflow-wrap: break-word;
 }
-[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] h1,
-[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] h2,
-[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] h3 {
+[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] p {
+    line-height: 1.9;
+    margin: .35rem 0 .7rem;
+}
+[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] ul,
+[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] ol {
+    padding-inline-start: 1.6rem;
+    margin: .5rem 0;
+}
+[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] li {
+    padding-inline-start: .2rem;
+    margin-bottom: .45rem;
+}
+[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] li::marker {
+    color: #087E8B;
+    font-weight: 800;
+}
+[class*="st-key-mueen_plan_card_"] [data-testid="stMarkdownContainer"] h4 {
     color: #10243A;
-    line-height: 1.5;
-    margin: 14px 0 8px;
-}
-[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] ol,
-[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] ul {
-    padding-inline-start: 1.8rem;
-    padding-inline-end: 0;
-    margin-block: 0.6rem;
-}
-[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] li {
-    margin-bottom: 0.5rem;
-    padding-inline-start: 0.2rem;
-}
-[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] p {
-    line-height: 1.95;
-    margin-bottom: 0.8rem;
+    font-weight: 800;
+    margin: 0 0 .45rem;
+    font-size: 20px;
 }
 </style>
 """, unsafe_allow_html=True)
+
+
+def split_mueen_plan_sections(plan_text, is_arabic=True):
+    """قسّم الخطة بصريًا دون تعديل النص الأصلي أو بياناته المحفوظة."""
+    headings_ar = [
+        ("🔍", "تفسير النتيجة", ("تفسير حذر للنتيجة", "تفسير النتيجة")),
+        ("🎯", "الهدف القابل للقياس", ("هدف قابل للقياس", "الهدف القابل للقياس")),
+        ("📖", "الشرح المبسط", ("شرح مبسط", "الشرح المبسط")),
+        ("💡", "المثال المحلول", ("مثال محلول", "المثال المحلول")),
+        ("🧩", "النشاط العلاجي · 10 دقائق", ("نشاط علاجي", "النشاط العلاجي")),
+        ("📝", "أسئلة المتابعة والإجابات", ("خمسة أسئلة متابعة", "أسئلة متابعة", "اسئلة متابعة")),
+        ("✅", "معيار الإتقان", ("معيار إتقان", "معيار الإتقان")),
+        ("🔄", "التدخل البديل", ("بديل إذا لم يتحقق", "التدخل البديل")),
+        ("📈", "الخطوة التالية", ("الخطوة التالية بعد التقييم", "الخطوة التالية")),
+    ]
+    headings_en = [
+        ("🔍", "Interpretation", ("interpretation", "interpret the result")),
+        ("🎯", "Measurable objective", ("measurable objective", "measurable goal")),
+        ("📖", "Simple explanation", ("simple explanation", "simplified explanation")),
+        ("💡", "Worked example", ("worked example", "solved example")),
+        ("🧩", "10-minute activity", ("remedial activity", "10-minute activity")),
+        ("📝", "Follow-up questions", ("follow-up questions", "five questions")),
+        ("✅", "Mastery criterion", ("mastery criterion", "mastery criteria")),
+        ("🔄", "Alternative support", ("alternative if", "alternative intervention")),
+        ("📈", "Next steps", ("next step", "after the follow-up")),
+    ]
+    headings = headings_ar if is_arabic else headings_en
+    sections = []
+    current = None
+    buffer = []
+    for line in plan_text.splitlines():
+        normalized = re.sub(r"^[\s#*\-\d٠-٩.)،:]+", "", line.strip()).strip()
+        normalized = normalized.rstrip(" :：*#").lower()
+        match = None
+        # لا تعامل جملة طويلة تحتوي اسم القسم على أنها عنوان.
+        if len(normalized) <= 95:
+            for index, (icon, title, variants) in enumerate(headings):
+                if any(normalized.startswith(v.lower()) for v in variants):
+                    match = index
+                    break
+        if match is not None:
+            if buffer and any(x.strip() for x in buffer):
+                sections.append((current, "\n".join(buffer).strip()))
+            current = match
+            buffer = []
+        else:
+            buffer.append(line)
+    if buffer and any(x.strip() for x in buffer):
+        sections.append((current, "\n".join(buffer).strip()))
+    return headings, sections
+
 
 with mueen_page(5):
     demo=pd.DataFrame([
@@ -3001,42 +3062,31 @@ with mueen_page(5):
                 "#### 📘 الخطة العلاجية: " + skill_title
             )
 
-            # عرض الخطة داخل بطاقة مستقلة مع اتجاه مناسب للغة
-            with st.container(border=True, key="mueen_plan_display"):
-                plan_direction = "rtl" if st.session_state.get("mueen_output_language", "العربية") == "العربية" else "ltr"
-                st.markdown(
-                    "<style>"
-                    f'[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] '
-                    f'{{direction:{plan_direction};text-align:{"right" if plan_direction == "rtl" else "left"};}}'
-                    '[class*="st-key-mueen_plan_display"] ol, '
-                    '[class*="st-key-mueen_plan_display"] ul '
-                    '{padding-inline-start:1.7rem;line-height:1.9;}'
-                    '[class*="st-key-mueen_plan_display"] li {margin-bottom:.45rem;}'
-                    '[class*="st-key-mueen_plan_display"] h3 '
-                    '{color:#087E8B;font-weight:800;margin-top:1.1rem;}'
-                    "</style>",
-                    unsafe_allow_html=True,
-                )
-                # تنسيق بصري فقط: لا نغيّر النص الأصلي أو ملف التنزيل.
-                plan_headings = (
-                    "تفسير حذر للنتيجة دون افتراض أسباب غير مثبتة",
-                    "هدف قابل للقياس", "شرح مبسط", "مثال محلول",
-                    "نشاط علاجي 10 دقائق", "خمسة أسئلة متابعة مع الإجابات",
-                    "معيار إتقان مقترح", "بديل إذا لم يتحقق الإتقان",
-                    "الخطوة التالية بعد التقييم البعدي",
-                )
-                formatted_lines = []
-                for line in plan_text.splitlines():
-                    stripped = line.strip()
-                    heading = stripped.rstrip(":： ").strip("* ")
-                    if heading in plan_headings:
-                        formatted_lines.append("\n### " + heading + "\n")
-                    elif re.match(r"^س[0-9٠-٩]+\s*[:：]", stripped):
-                        formatted_lines.append("\n**" + stripped + "**")
-                    else:
-                        formatted_lines.append(line)
-                formatted_plan = "\n".join(formatted_lines)
-                st.markdown(formatted_plan)
+            # تقسيم الخطة إلى بطاقات مستقلة دون تغيير النص الأصلي للتنزيل.
+            plan_is_arabic = st.session_state.get("mueen_output_language", "العربية") == "العربية"
+            plan_direction = "rtl" if plan_is_arabic else "ltr"
+            plan_headings, plan_sections = split_mueen_plan_sections(plan_text, plan_is_arabic)
+            if not plan_sections:
+                plan_sections = [(None, plan_text)]
+
+            for card_index, (section_number, section_text) in enumerate(plan_sections):
+                with st.container(border=True, key=f"mueen_plan_card_{card_index}"):
+                    st.markdown(
+                        f'<div dir="{plan_direction}" style="text-align:{"right" if plan_is_arabic else "left"};">'
+                        + (
+                            f'<h4 style="color:#087E8B;font-size:21px;margin:0 0 8px;font-weight:800">'
+                            f'{plan_headings[section_number][0]} {html.escape(plan_headings[section_number][1])}</h4>'
+                            if section_number is not None else ""
+                        ) + '</div>',
+                        unsafe_allow_html=True,
+                    )
+                    # النص Markdown يبقى نصًا آمنًا، مع اتجاه مناسب للغة.
+                    st.markdown(
+                        f'<div dir="{plan_direction}" style="text-align:{"right" if plan_is_arabic else "left"};">'
+                        + html.escape(section_text).replace("\n", "<br>")
+                        + '</div>',
+                        unsafe_allow_html=True,
+                    )
 
             # تنزيل الخطة
             st.download_button(
