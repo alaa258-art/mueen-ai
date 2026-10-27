@@ -456,6 +456,79 @@ def mueen_v5_prior_interventions(school_id, subject_id=None, skill_id=None):
 
 
 # MUEEN V5.1 — فحص تكامل آمن: قراءة فقط، دون كتابة أو حذف بيانات.
+
+# V5.2 — اختبار كتابة حقيقي محدود بمدرسة تجريبية مستقلة.
+def mueen_v52_write_probe():
+    from uuid import uuid4
+    from datetime import date
+    results = []
+    def add(name, status, detail):
+        results.append({"الاختبار": name, "النتيجة": status, "التفاصيل": str(detail)})
+    client = get_supabase()
+    if client is None:
+        add("الاتصال", "فشل", "لا توجد جلسة صالحة")
+        return results
+    school_id = str(get_selected_school_id())
+    user_id = get_current_user_id(client)
+    school_rows = client.table("schools").select("name").eq("id", school_id).limit(1).execute().data or []
+    school_name = str(school_rows[0]["name"]) if school_rows else ""
+    membership = (client.table("school_memberships").select("role")
+                  .eq("school_id", school_id).eq("user_id", user_id)
+                  .eq("is_active", True).limit(1).execute().data or [])
+    role = str(membership[0]["role"]).lower() if membership else ""
+    if not school_name.startswith("MUEEN_TEST_") or role not in ("principal", "coordinator"):
+        add("شروط السلامة", "مرفوض",
+            "يجب اختيار مدرسة اختبار مستقلة يبدأ اسمها حرفيًا بـ MUEEN_TEST_ وامتلاك دور مدير أو منسق.")
+        return results
+
+    token = "MUEEN_TEST_" + uuid4().hex
+    plan_id = None
+    followup_id = None
+    try:
+        payload = {
+            "school_id": school_id, "plan_title": token,
+            "learning_gap": "اختبار تقني فقط؛ لا يمثل طالبًا",
+            "intervention_strategy": "اختبار كتابة واسترجاع",
+            "success_criteria": "إمكانية استرجاع الخطة والمتابعة",
+            "plan_status": "draft", "created_by": user_id
+        }
+        created = client.table("intervention_plans").insert(payload).execute().data or []
+        if not created:
+            raise RuntimeError("لم يرجع إدراج الخطة صفًا")
+        plan_id = str(created[0]["id"])
+        add("إدراج الخطة", "نجاح", f"معرّف الخطة التجريبية: {plan_id}")
+        fetched = (client.table("intervention_plans").select("id,plan_title,school_id")
+                   .eq("id", plan_id).eq("school_id", school_id).limit(1).execute().data or [])
+        if not fetched or fetched[0].get("plan_title") != token:
+            raise RuntimeError("لم يمكن استرجاع الخطة بنفس العلامة والمدرسة")
+        add("استرجاع الخطة", "نجاح", "تطابقت علامة الاختبار ومعرّف المدرسة")
+        followup = {
+            "school_id": school_id, "intervention_plan_id": plan_id,
+            "followup_date": date.today().isoformat(),
+            "activity_completed": token, "teacher_notes": "اختبار تقني فقط",
+            "progress_percentage": 10, "next_action": "لا إجراء — سجل تجريبي",
+            "recorded_by": user_id
+        }
+        rows = client.table("intervention_followups").insert(followup).execute().data or []
+        if not rows:
+            raise RuntimeError("لم يرجع إدراج المتابعة صفًا")
+        followup_id = str(rows[0]["id"])
+        add("إدراج المتابعة", "نجاح", f"معرّف المتابعة: {followup_id}")
+        fetched_followup = (client.table("intervention_followups")
+                            .select("id,school_id,intervention_plan_id,activity_completed")
+                            .eq("id", followup_id).eq("school_id", school_id).limit(1).execute().data or [])
+        if (not fetched_followup or str(fetched_followup[0].get("intervention_plan_id")) != plan_id
+                or fetched_followup[0].get("activity_completed") != token):
+            raise RuntimeError("فشل التحقق من بيانات المتابعة المسترجعة")
+        add("استرجاع المتابعة", "نجاح", "ارتباط المتابعة بالخطة والمدرسة صحيح")
+    except Exception as exc:
+        add("تنفيذ الاختبار", "فشل", type(exc).__name__ + ": " + str(exc)[:350])
+    finally:
+        if plan_id:
+            add("التنظيف", "يتطلب إجراء", "سجلات اختبار محفوظة في مدرسة الاختبار؛ لا حذف تلقائي لعدم وجود سياسة DELETE.")
+            add("معرّفات التنظيف", "معلومات", f"plan_id={plan_id}; followup_id={followup_id or 'لم يُنشأ'}")
+    return results
+
 def mueen_v51_integration_audit():
     results = []
     def record(test, ok, detail):
@@ -1175,6 +1248,23 @@ with mueen_page(6):
         st.warning("هذا الفحص لا يثبت نجاح INSERT أو DELETE أو عزل RLS بين حسابين. لا تستخدم نتائج الاختبار دليلًا على نجاح الحفظ الفعلي.")
 
 with mueen_page(6):
+
+    st.markdown("### 🔐 V5.2 — اختبار الحفظ والاسترجاع الفعلي")
+    st.caption("يُنشئ خطة ومتابعة تقنيتين دون ربطهما بأي طالب. متاح فقط داخل مدرسة اختبار يبدأ اسمها بـ MUEEN_TEST_.")
+    st.warning("لا توجد سياسة DELETE للجداول حاليًا؛ ستبقى سجلات الاختبار في مدرسة الاختبار حتى تنظيفها إداريًا. لا تشغّل هذا الاختبار على مدرسة فعلية.")
+    consent = st.checkbox("أؤكد أنني اخترت مدرسة اختبار مستقلة وأوافق على إبقاء السجلات التجريبية مؤقتًا", key="v52_consent")
+    if st.button("🧪 اختبار الحفظ والاسترجاع الحقيقي", disabled=not consent, key="v52_write_test"):
+        with st.spinner("جارٍ اختبار الكتابة والاسترجاع..."):
+            st.session_state["v52_write_report"] = {"school": get_selected_school_id(), "rows": mueen_v52_write_probe()}
+    report52 = st.session_state.get("v52_write_report", {})
+    if report52.get("school") == get_selected_school_id() and report52.get("rows"):
+        df52 = pd.DataFrame(report52["rows"])
+        st.dataframe(df52, use_container_width=True, hide_index=True)
+        st.download_button("تنزيل تقرير V5.2", df52.to_csv(index=False).encode("utf-8-sig"),
+                           "MUEEN_V5_2_write_report.csv", "text/csv", key="v52_download")
+    st.markdown("### 🛡️ اختبار عزل المدارس")
+    st.info("اختبار عزل مدرستين لا يُعد مكتملًا دون حساب ثانٍ لا يملك عضوية في المدرسة المستهدفة. لا يثبت هذا الزر العزل عبر حساب واحد.")
+
     # =========================================================
     # إدارة الهيكل الأكاديمي - MUEEN AI
     # =========================================================
