@@ -98,13 +98,13 @@ def ai(model, prompt):
     return OpenAI(api_key=key).responses.create(model=model, input=prompt).output_text
 
 
-def create_plan(model, subject, grade, skill, mastery, output_language, notes, group):
+def create_plan(model, subject, grade, skill, mastery, output_language, notes, group, threshold=80):
     prompt = f"""اكتب الإجابة كاملة باللغة {output_language} فقط.
 إذا كانت اللغة English، فاكتب الخطة العلاجية كلها باللغة الإنجليزية.
 إذا كانت اللغة العربية، فاكتب الخطة العلاجية كلها باللغة العربية.
 أنت وكيل دعم تعلم يساعد المعلم وليس بديلًا عنه. أنشئ خطة علاجية عملية باللغة {output_language}.
 المادة: {subject}؛ الصف: {grade}؛ المهارة: {skill}؛ متوسط الإتقان: {mastery:.1f}%؛ الفئة: {group}؛ ملاحظات المعلم: {notes or 'لا توجد'}.
-اجعل المثال المحلول والنشاط العلاجي مرتبطين مباشرة بالمادة والمهارة المحددتين؛ في الحوسبة استخدم مثالًا حاسوبيًا أو خوارزمية مناسبة للعمر، ولا تستخدم إعداد الطعام أو الشاي. اكتب كل عنوان من العناوين التسعة في سطر مستقل، واكتب الخطوات المرقمة بالشكل 1. خطوة، 2. خطوة، والأسئلة مع إجاباتها في أسطر منفصلة. فرّق بين نسبة إتقان الفرد ونسبة الطلاب الذين يحققون الإتقان، ولا تستنتج أسبابًا غير مثبتة. نظّم الإجابة: 1) تفسير حذر للنتيجة دون افتراض أسباب غير مثبتة. 2) هدف قابل للقياس. 3) شرح مبسط. 4) مثال محلول. 5) نشاط علاجي 10 دقائق. 6) خمسة أسئلة متابعة مع الإجابات. 7) معيار إتقان مقترح 80% أو وفق إعداد المعلم. 8) بديل إذا لم يتحقق الإتقان. 9) الخطوة التالية بعد التقييم البعدي. لا تشخّص طبيًا أو نفسيًا، واجعل المعلم صاحب القرار."""
+اجعل الهدف يقيس إتقان المهارة لدى الطالب في اختبار متابعة واضح، ولا تدّعِ أن نسبة من الطلاب حققت الهدف دون بيانات فردية. اجعل المثال المحلول والنشاط العلاجي مرتبطين مباشرة بالمادة والمهارة المحددتين؛ في الحوسبة استخدم مثالًا حاسوبيًا أو خوارزمية مناسبة للعمر، ولا تستخدم إعداد الطعام أو الشاي. اكتب كل عنوان من العناوين التسعة في سطر مستقل، واكتب الخطوات المرقمة بالشكل 1. خطوة، 2. خطوة، والأسئلة مع إجاباتها في أسطر منفصلة. فرّق بين نسبة إتقان الفرد ونسبة الطلاب الذين يحققون الإتقان، ولا تستنتج أسبابًا غير مثبتة. نظّم الإجابة: 1) تفسير حذر للنتيجة دون افتراض أسباب غير مثبتة. 2) هدف قابل للقياس. 3) شرح مبسط. 4) مثال محلول. 5) نشاط علاجي 10 دقائق. 6) خمسة أسئلة متابعة مع الإجابات. 7) معيار إتقان مقترح {threshold}% وفق إعداد المعلم. 8) بديل إذا لم يتحقق الإتقان. 9) الخطوة التالية بعد التقييم البعدي. لا تشخّص طبيًا أو نفسيًا، واجعل المعلم صاحب القرار."""
     return ai(model, prompt)
 
 
@@ -2758,26 +2758,54 @@ button.secondary {{ background: var(--navy); }}
 elif not db_client and st.session_state.get("mueen_active_page") in (1, 2, 3, 4):
     st.info("فعّل اتصال Supabase لعرض لوحة المتابعة المحفوظة.")
 
-# تصميم V2 محصور في بطاقات الخطة العلاجية فقط.
+# تصميم V3 مدمج ومحصور في بطاقات الخطة العلاجية فقط.
 st.markdown("""
 <style>
 [class*="st-key-mueen_plan_card_"] {
-    background:#fff !important; border:1px solid #d8e6ef !important;
-    border-radius:18px !important; padding:20px 24px !important;
-    box-shadow:0 5px 20px rgba(16,36,58,.06); margin-bottom:14px;
+    background:#ffffff !important;
+    border:1px solid #d9e5ed !important;
+    border-radius:14px !important;
+    padding:12px 18px !important;
+    box-shadow:0 3px 12px rgba(16,36,58,.045);
+    margin-bottom:7px !important;
 }
-[class*="st-key-mueen_plan_card_"] .mueen-plan-v2 {font-family:'Tajawal','Segoe UI',Arial,sans-serif; font-size:18px; line-height:2; color:#183248; overflow-wrap:anywhere;}
-[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-head {background:#edf8fa; border-inline-start:5px solid #087e8b; border-radius:11px; padding:10px 16px; margin-bottom:16px; color:#075e69; font-size:21px; font-weight:800;}
-[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body {padding:0 8px 5px;}
-[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body p {margin:0 0 13px; font-size:18px; line-height:2;}
+[class*="st-key-mueen_plan_card_"] [data-testid="stVerticalBlock"] {gap:0 !important;}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2 {
+    font-family:'Tajawal','Segoe UI',Arial,sans-serif;
+    font-size:18px;line-height:1.8;color:#183248;
+    overflow-wrap:break-word;
+}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-head {
+    background:#eff8f9;border-inline-start:4px solid #087e8b;
+    border-radius:8px;padding:7px 12px;margin-bottom:9px;
+    color:#075e69;font-size:20px;font-weight:800;line-height:1.5;
+}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body {padding:0 5px;max-width:1080px;margin-inline:auto;}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body p {
+    margin:0 0 8px;font-size:18px;line-height:1.8;
+}
 [class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body ul,
-[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body ol {margin:8px 0 16px; padding-inline-start:32px; list-style-position:outside;}
-[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body li {font-size:18px; line-height:1.95; padding-inline-start:7px; margin-bottom:9px;}
-[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body li::marker {color:#087e8b; font-weight:800;}
-@media(max-width:700px){[class*="st-key-mueen_plan_card_"]{padding:13px 14px !important;} [class*="st-key-mueen_plan_card_"] .mueen-plan-v2{font-size:16px;} [class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body p,[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body li{font-size:16px;} }
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body ol {
+    margin:5px 0 10px;padding-inline-start:28px;list-style-position:outside;
+}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body li {
+    font-size:18px;line-height:1.8;padding-inline-start:4px;margin-bottom:4px;
+}
+[class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body li::marker {color:#087e8b;font-weight:800;}
+.mueen-plan-v3-metrics {display:flex;gap:10px;flex-wrap:wrap;margin:7px 0 13px;direction:rtl;}
+.mueen-plan-v3-metrics span {
+    display:inline-block;background:#eaf5f6;color:#075e69;
+    border:1px solid #cce5e8;border-radius:9px;
+    padding:7px 12px;font-weight:700;font-size:16px;
+}
+@media(max-width:700px) {
+    [class*="st-key-mueen_plan_card_"] {padding:10px 12px !important;}
+    [class*="st-key-mueen_plan_card_"] .mueen-plan-v2-head {font-size:18px;}
+    [class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body p,
+    [class*="st-key-mueen_plan_card_"] .mueen-plan-v2-body li {font-size:16px;}
+}
 </style>
 """, unsafe_allow_html=True)
-
 
 def render_mueen_plan_body(section_text):
     """تحويل نص الخطة إلى فقرات وقوائم HTML آمنة دون تعديل النص المحفوظ."""
@@ -3051,7 +3079,8 @@ with mueen_page(5):
                         mastery,
                         output_language,
                         notes,
-                        group
+                        group,
+                        threshold
                     )
                     st.session_state["last_skill"] = skill
 
@@ -3069,6 +3098,15 @@ with mueen_page(5):
 
             st.markdown(
                 "#### 📘 الخطة العلاجية: " + skill_title
+            )
+            # مؤشرات توضيحية فقط؛ حد الإتقان هو إعداد المعلم الحالي.
+            st.markdown(
+                '<div class="mueen-plan-v3-metrics" dir="rtl">'
+                f'<span>📊 الإتقان القبلي: {mastery:.1f}%</span>'
+                f'<span>🎯 حد الإتقان: {threshold}%</span>'
+                '<span>⏱️ النشاط: 10 دقائق</span>'
+                '</div>',
+                unsafe_allow_html=True
             )
 
             # تقسيم الخطة إلى بطاقات مستقلة دون تغيير النص الأصلي للتنزيل.
