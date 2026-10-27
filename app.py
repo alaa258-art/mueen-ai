@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import html
+import re
 from openai import OpenAI
 from datetime import datetime
 from supabase import create_client
@@ -2952,10 +2953,35 @@ with mueen_page(5):
                     "<style>"
                     f'[class*="st-key-mueen_plan_display"] [data-testid="stMarkdownContainer"] '
                     f'{{direction:{plan_direction};text-align:{"right" if plan_direction == "rtl" else "left"};}}'
+                    '[class*="st-key-mueen_plan_display"] ol, '
+                    '[class*="st-key-mueen_plan_display"] ul '
+                    '{padding-inline-start:1.7rem;line-height:1.9;}'
+                    '[class*="st-key-mueen_plan_display"] li {margin-bottom:.45rem;}'
+                    '[class*="st-key-mueen_plan_display"] h3 '
+                    '{color:#087E8B;font-weight:800;margin-top:1.1rem;}'
                     "</style>",
                     unsafe_allow_html=True,
                 )
-                st.markdown(plan_text)
+                # تنسيق بصري فقط: لا نغيّر النص الأصلي أو ملف التنزيل.
+                plan_headings = (
+                    "تفسير حذر للنتيجة دون افتراض أسباب غير مثبتة",
+                    "هدف قابل للقياس", "شرح مبسط", "مثال محلول",
+                    "نشاط علاجي 10 دقائق", "خمسة أسئلة متابعة مع الإجابات",
+                    "معيار إتقان مقترح", "بديل إذا لم يتحقق الإتقان",
+                    "الخطوة التالية بعد التقييم البعدي",
+                )
+                formatted_lines = []
+                for line in plan_text.splitlines():
+                    stripped = line.strip()
+                    heading = stripped.rstrip(":： ").strip("* ")
+                    if heading in plan_headings:
+                        formatted_lines.append("\n### " + heading + "\n")
+                    elif re.match(r"^س[0-9٠-٩]+\s*[:：]", stripped):
+                        formatted_lines.append("\n**" + stripped + "**")
+                    else:
+                        formatted_lines.append(line)
+                formatted_plan = "\n".join(formatted_lines)
+                st.markdown(formatted_plan)
 
             # تنزيل الخطة
             st.download_button(
