@@ -457,6 +457,121 @@ def mueen_v5_prior_interventions(school_id, subject_id=None, skill_id=None):
 
 # MUEEN V5.1 — فحص تكامل آمن: قراءة فقط، دون كتابة أو حذف بيانات.
 
+
+# V5.3 — تجربة تعليمية تجريبية متكاملة، بسجلات اختبار فقط.
+def mueen_v53_pilot(model="gpt-4.1-mini"):
+    from uuid import uuid4
+    from datetime import date, datetime as dt
+    from io import BytesIO
+    import json
+    results, evidence = [], {}
+    def mark(step, status, details):
+        results.append({"المرحلة": step, "النتيجة": status, "الدليل": str(details)[:500]})
+    token = "MUEEN_PILOT_" + uuid4().hex[:12]
+    client = get_supabase()
+    if client is None:
+        mark("التحقق من الجلسة", "فشل", "جلسة Supabase غير متاحة")
+        return results, evidence
+    school_id = str(get_selected_school_id())
+    uid = str(get_current_user_id(client))
+    plan_id = None
+    try:
+        schools = client.table("schools").select("name").eq("id", school_id).limit(1).execute().data or []
+        memberships = (client.table("school_memberships").select("role")
+                       .eq("school_id", school_id).eq("user_id", uid)
+                       .eq("is_active", True).limit(1).execute().data or [])
+        role = str(memberships[0]["role"]).lower() if memberships else ""
+        if not schools or not str(schools[0]["name"]).startswith("MUEEN_TEST_") or role not in ("principal", "coordinator"):
+            mark("السلامة والصلاحيات", "مرفوض", "مدرسة اختبار مستقلة ودور مدير/منسق مطلوبان")
+            return results, evidence
+        mark("السلامة والصلاحيات", "نجاح", "مدرسة اختبار؛ صلاحية " + role)
+        student = token
+        skill = "ترتيب خطوات الحل"
+        before = pd.DataFrame([{"Student":student,"Skill":skill,"Score":2,"MaxScore":5}])
+        after = pd.DataFrame([{"Student":student,"Skill":skill,"Score":17,"MaxScore":20}])
+        mark("1. التقييم القبلي", "نجاح", "بيانات افتراضية: 2/5 = 40%، دون ربط بطالب حقيقي")
+        weak = float(before.loc[before["Skill"] == skill, "Score"].iloc[0] / before["MaxScore"].iloc[0] * 100)
+        mark("2. تشخيص المهارة", "نجاح" if weak < 80 else "فشل", f"{skill}: {weak:.0f}%؛ حد الإتقان 80%")
+        # يستخدم مولد الخطة والاختبار الفعليين في التطبيق؛ لا يختلق نجاحهما.
+        plan = create_plan(model, "الرياضيات", "الصف السابع", skill, weak, "العربية",
+                           "بيانات اختبار افتراضية، يرجى صياغة نشاط رياضيات", "مجموعة اختبار مجهولة", 80)
+        quiz = create_quiz(model, "الرياضيات", "الصف السابع", skill, "العربية")
+        if not isinstance(plan, str) or len(plan.strip()) < 150 or not isinstance(quiz, str) or len(quiz.strip()) < 70:
+            raise ValueError("المخرجات التعليمية قصيرة أو فارغة؛ يلزم مراجعتها")
+        evidence["الخطة_المولدة"] = plan
+        evidence["الاختبار_المولد"] = quiz
+        mark("3. توليد خطة واختبار بالذكاء الاصطناعي", "نجاح", f"خطة {len(plan)} حرف؛ اختبار {len(quiz)} حرف. الجودة تحتاج مراجعة بشرية.")
+        mark("4. اعتماد المعلم", "محاكاة فقط", "الموافقة المسبقة على إجراء اختبار آلي لا تمثل مراجعة المعلم للخطة المولدة.")
+        payload = {
+            "school_id": school_id, "plan_title": token + " | " + skill,
+            "learning_gap": "سيناريو اختبار: تقييم قبلي 40% في " + skill,
+            "intervention_strategy": plan[:14000],
+            "success_criteria": "سيناريو اختباري: 80% فأكثر؛ اختبار من خمس فقرات ومراجعة المعلم",
+            "plan_status": "draft", "created_by": uid,
+        }
+        saved_plan = client.table("intervention_plans").insert(payload).execute().data or []
+        if not saved_plan: raise RuntimeError("لم يُرجع إدراج الخطة بيانات")
+        plan_id = str(saved_plan[0]["id"])
+        plan_read = (client.table("intervention_plans").select("id,school_id,plan_title")
+                     .eq("id", plan_id).eq("school_id", school_id).limit(1).execute().data or [])
+        if not plan_read or plan_read[0]["plan_title"] != payload["plan_title"]:
+            raise RuntimeError("فشل التحقق من الخطة المحفوظة")
+        mark("5. حفظ الخطة واسترجاعها", "نجاح", "plan_id=" + plan_id)
+        # النشاط والنتيجة البعدية مفترضان للتجربة، ولا يُنسبان إلى تعلم حقيقي.
+        mark("6. تنفيذ النشاط العلاجي", "محاكاة فقط", "لم يُنفذ نشاط مع طالب؛ تم إنشاء سيناريو متابعة افتراضي.")
+        paired = mueen_v5_paired(before, after, skill)
+        delta = float(paired.iloc[0]["التغير"])
+        rec, decision_delta = decide(40, 85, 80)
+        if abs(delta - 45) > 0.01 or abs(decision_delta - 45) > 0.01:
+            raise AssertionError("خطأ في حساب التحسن المتوقع (+45 نقطة مئوية)")
+        mark("7. مقارنة القبلي والبعدي", "نجاح", "40% → 85% = +45 نقطة مئوية (نتيجة افتراضية)")
+        mark("8. قرار الوكيل", "نجاح" if "إتقان" in rec else "فشل", rec)
+        # حفظ نتائج التقييم في جدولها الحقيقي ضمن مدرسة الاختبار.
+        assessment_rows = [
+            {"student_code":student, "skill":skill, "assessment_type":"baseline",
+             "score":2, "max_score":5, "recommendation":"V5.3 TEST ONLY"},
+            {"student_code":student, "skill":skill, "assessment_type":"follow_up",
+             "score":17, "max_score":20, "recommendation":"V5.3 TEST ONLY"}
+        ]
+        for row in assessment_rows:
+            row.update({"school_id":school_id, "created_by":uid})
+        saved_assessments = client.table("assessment_records").insert(assessment_rows).execute().data or []
+        if len(saved_assessments) != 2:
+            raise RuntimeError("لم تُرجع قاعدة البيانات سجلَي التقييم")
+        read_assessments = (client.table("assessment_records")
+                            .select("assessment_type,score,max_score")
+                            .eq("school_id",school_id).eq("student_code",student).execute().data or [])
+        if len(read_assessments) != 2:
+            raise RuntimeError("فشل استرجاع سجلَي التقييم")
+        mark("9. حفظ التقييمين واسترجاعهما", "نجاح", "سجلان فعليان في assessment_records؛ رمز تجريبي " + student)
+        followup = {
+            "school_id":school_id, "intervention_plan_id":plan_id,
+            "followup_date":date.today().isoformat(),
+            "activity_completed":"V5.3 TEST ONLY — نشاط محاكى، لم يُنفذ",
+            "teacher_notes":"تجربة تقنية ببيانات افتراضية؛ لا دليل على أثر تعليمي فعلي",
+            "progress_percentage":85,
+            "next_action":rec, "recorded_by":uid,
+        }
+        created_followup = client.table("intervention_followups").insert(followup).execute().data or []
+        if not created_followup: raise RuntimeError("لم تُرجع المتابعة المحفوظة")
+        followup_id = str(created_followup[0]["id"])
+        followup_read = (client.table("intervention_followups")
+                         .select("id,intervention_plan_id,school_id")
+                         .eq("id",followup_id).eq("school_id",school_id).limit(1).execute().data or [])
+        if not followup_read or str(followup_read[0]["intervention_plan_id"]) != plan_id:
+            raise RuntimeError("فشل استرجاع المتابعة أو ربطها بالخطة")
+        mark("10. حفظ المتابعة واسترجاعها", "نجاح", "followup_id=" + followup_id)
+        evidence.update({"رمز_التجربة":token, "المدرسة":school_id, "معرف_الخطة":plan_id,
+                         "معرف_المتابعة":followup_id, "رمز_الطالب_الافتراضي":student,
+                         "تاريخ_الاختبار":dt.now().isoformat(),
+                         "التحسن_المحاكى_نقطة_مئوية":delta,
+                         "تنبيه":"لم تحدث مراجعة معلم فعلية أو نشاط تعليمي فعلي. السجلات باقية في مدرسة الاختبار."})
+    except Exception as exc:
+        mark("توقف التنفيذ", "فشل", type(exc).__name__ + ": " + str(exc)[:350])
+        if plan_id:
+            evidence["معرف_الخطة_التي_قد_تكون_حفظت"] = plan_id
+    return results, evidence
+
 # V5.2 — اختبار كتابة حقيقي محدود بمدرسة تجريبية مستقلة.
 def mueen_v52_write_probe():
     from uuid import uuid4
@@ -1225,6 +1340,40 @@ else:
 
 with mueen_page(0):
     st.info("مرحبًا بك في مُعين. اختر إحدى البطاقات الملونة أعلاه لفتح القسم المطلوب.")
+
+
+with mueen_page(6):
+    st.markdown("## 🎓 V5.3 — اختبار التجربة التعليمية المتكاملة")
+    st.info("اختبار تقني متكامل ببيانات افتراضية: يولد خطة واختبارًا عبر OpenAI، ويحفظ التقييمين والخطة والمتابعة في Supabase، ثم يتحقق من استرجاعها.")
+    st.warning("لا يثبت أثرًا تعليميًا فعليًا، ولا يمثل اعتمادًا بشريًا للخطة أو تنفيذًا حقيقيًا للنشاط. سجلات الاختبار لا تُحذف تلقائيًا.")
+    pilot_model = st.text_input("نموذج OpenAI للاختبار", value="gpt-4.1-mini", key="v53_model")
+    pilot_confirm = st.checkbox("أوافق على استخدام مدرسة MUEEN_TEST_ فقط، وتكلفة طلبَي OpenAI، وبقاء سجلات الاختبار التجريبية", key="v53_confirm")
+    if st.button("🚀 تشغيل التجربة التعليمية المتكاملة", key="v53_run", disabled=not pilot_confirm, use_container_width=True):
+        with st.spinner("جارٍ إنشاء الخطة والاختبار، ثم حفظ السجلات والتحقق منها..."):
+            rows, evidence = mueen_v53_pilot(pilot_model)
+            st.session_state["v53_report"] = {"school":get_selected_school_id(),"rows":rows,"evidence":evidence}
+    pilot_report = st.session_state.get("v53_report", {})
+    if pilot_report.get("school") == get_selected_school_id() and pilot_report.get("rows"):
+        result_df = pd.DataFrame(pilot_report["rows"])
+        st.dataframe(result_df, use_container_width=True, hide_index=True)
+        successful = int((result_df["النتيجة"] == "نجاح").sum())
+        st.metric("الاختبارات الناجحة فعليًا", f"{successful} / {len(result_df)}")
+        evidence = pilot_report.get("evidence", {})
+        if evidence.get("الخطة_المولدة"):
+            with st.expander("📘 الخطة العلاجية المولدة — تحتاج مراجعة المعلم"):
+                st.write(evidence["الخطة_المولدة"])
+        if evidence.get("الاختبار_المولد"):
+            with st.expander("📝 اختبار المتابعة المولد — يحتاج مراجعة المعلم"):
+                st.write(evidence["الاختبار_المولد"])
+        from io import BytesIO
+        import json
+        st.download_button("📥 تنزيل التقرير CSV",
+            result_df.to_csv(index=False).encode("utf-8-sig"),
+            "MUEEN_V5_3_Pilot_Report.csv", "text/csv", key="v53_csv")
+        st.download_button("📥 تنزيل التقرير التفصيلي JSON (يشمل الخطة والاختبار)",
+            json.dumps({"results":pilot_report["rows"],"evidence":evidence},
+                       ensure_ascii=False, indent=2).encode("utf-8"),
+            "MUEEN_V5_3_Pilot_Report.json", "application/json", key="v53_json")
 
 with mueen_page(6):
     st.markdown("### 🧪 اختبار التكامل الشامل — V5.1")
