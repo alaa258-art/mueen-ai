@@ -1343,167 +1343,169 @@ with mueen_page(0):
 
 
 with mueen_page(6):
-    st.markdown("## 🧭 V5.4 — سير العمل التعليمي للمعلم والمدير")
-    st.caption("التقييم القبلي ← مقترح علاجي ← اعتماد المدير ← التقييم البعدي ← تقرير التحسن")
-    st.info("يستلزم هذا القسم تشغيل ملف SQL المرفق مرة واحدة لإعداد جدول المقترحات وصلاحياته.")
+    st.markdown("## 🧭 V5.5 — دورة التدخل العلاجي الموثقة")
+    st.warning("البيانات السابقة تجريبية. لا تُفسّر النتائج الافتراضية على أنها أثر تعليمي حقيقي.")
+    st.caption("يتطلب تشغيل MUEEN_V5_5_Migration.sql في Supabase أولًا. لا يحذف التحديث أي بيانات.")
     try:
-        v54_client = get_supabase()
-        v54_school = str(get_selected_school_id())
-        v54_uid = get_current_user_id(v54_client)
-        v54_role = str(st.session_state.get("mueen_school_role", "")).lower()
-        v54_manage = v54_role in ("principal", "coordinator")
-        v54_drafts = (v54_client.table("mueen_workflow_drafts").select("*")
-                      .eq("school_id", v54_school).order("created_at", desc=True)
-                      .limit(100).execute().data or [])
+        v55_client = get_supabase()
+        v55_school = str(get_selected_school_id())
+        v55_uid = get_current_user_id(v55_client)
+        v55_role = str(st.session_state.get("mueen_school_role", "")).lower()
+        v55_manage = v55_role in ("principal", "coordinator")
+        v55_drafts = (v55_client.table("mueen_workflow_drafts").select("*")
+            .eq("school_id", v55_school).order("created_at",desc=True).limit(200).execute().data or [])
+        st.caption("معرف المدرسة المختارة: " + v55_school)
     except Exception as e:
-        st.error("تعذر فتح سير العمل؛ تحقق من تنفيذ SQL وجلسة المستخدم: " + str(e)[:250])
-        v54_drafts = None
-    if v54_drafts is not None:
-        with st.expander("① تسجيل تقييم قبلي أو بعدي — حساب المعلم", expanded=True):
-            v54_code = st.text_input("رمز الطالب المجهول", key="v54_code", placeholder="PILOT-MATH-01")
-            v54_skill = st.text_input("المهارة", value="ترتيب خطوات الحل", key="v54_skill")
-            v54_subject = st.text_input("المادة", value="الرياضيات", key="v54_subject")
-            v54_grade = st.text_input("الصف", value="السابع", key="v54_grade")
-            v54_type = st.radio("نوع التقييم", ["قبلي", "بعدي"], horizontal=True, key="v54_type")
-            c1,c2 = st.columns(2)
-            v54_score = c1.number_input("الدرجة", min_value=0.0, value=8.0, step=1.0, key="v54_score")
-            v54_max = c2.number_input("الدرجة العظمى", min_value=0.1, value=20.0, step=1.0, key="v54_max")
-            st.write(f"نسبة الإتقان: **{100*v54_score/v54_max:.1f}%**")
-            if st.button("💾 حفظ التقييم في Supabase", key="v54_save_assessment"):
+        st.error("تعذر قراءة بيانات V5.5. نفّذ ملف SQL وتحقق من المدرسة: " + str(e)[:300])
+        v55_drafts = None
+    if v55_drafts is not None:
+        with st.expander("① إدخال تقييم وتحديد المحاولة صراحة",expanded=True):
+            v55_code = st.text_input("رمز الطالب",value="PILOT-MATH-01",key="v55_code")
+            v55_skill = st.text_input("المهارة",value="ترتيب خطوات الحل",key="v55_skill")
+            v55_subject = st.text_input("المادة",value="الرياضيات",key="v55_subject")
+            v55_grade = st.text_input("الصف",value="السابع",key="v55_grade")
+            v55_kind = st.radio("نوع التقييم",["قبلي","بعدي"],horizontal=True,key="v55_kind")
+            col_a,col_b = st.columns(2)
+            v55_score = col_a.number_input("الدرجة",min_value=0.0,value=8.0,key="v55_score")
+            v55_max = col_b.number_input("الدرجة الكلية",min_value=0.1,value=20.0,key="v55_max")
+            st.info("المحاولات المتعددة مسموحة. اختر المحاولة المطلوبة بالمعرف عند ربطها بالخطة؛ لا تعتمد أعلى درجة تلقائيًا.")
+            if st.button("💾 تسجيل محاولة تقييم جديدة",key="v55_save_assessment"):
                 try:
-                    if not v54_code.strip() or not v54_skill.strip() or v54_score > v54_max:
-                        raise ValueError("أدخل الرمز والمهارة وتحقق من الدرجة.")
-                    kind = "baseline" if v54_type == "قبلي" else "follow_up"
-                    payload = {"student_code":v54_code.strip(),"skill":v54_skill.strip(),
-                               "assessment_type":kind,"score":v54_score,"max_score":v54_max}
-                    save_assessment_records([payload])
-                    st.success("تم حفظ سجل التقييم فعليًا. تجنب الضغط مرة ثانية حتى لا يتكرر السجل.")
-                except Exception as e:
-                    st.error("فشل الحفظ: "+str(e)[:350])
-        with st.expander("② توليد المقترح العلاجي وإرساله للمدير", expanded=True):
-            st.caption("يستطيع المعلم إرسال مقترح دون صلاحية كتابة مباشرة في intervention_plans.")
-            v54_threshold = st.number_input("حد الإتقان (%)", min_value=1, max_value=100, value=80, key="v54_threshold")
-            v54_notes = st.text_area("ملاحظات المعلم", key="v54_notes")
-            if st.button("🤖 توليد الخطة والاختبار", key="v54_generate"):
-                try:
-                    if not v54_code.strip() or not v54_skill.strip(): raise ValueError("أدخل رمز الطالب والمهارة أولًا.")
-                    baseline_rows = (v54_client.table("assessment_records")
-                        .select("score,max_score").eq("school_id",v54_school)
-                        .eq("student_code",v54_code.strip()).eq("skill",v54_skill.strip())
-                        .eq("assessment_type","baseline").limit(100).execute().data or [])
-                    if len(baseline_rows) != 1:
-                        raise ValueError("يجب وجود تقييم قبلي محفوظ واحد فقط لهذا الطالب والمهارة؛ الموجود: "+str(len(baseline_rows)))
-                    before_pct = float(baseline_rows[0]["score"])/float(baseline_rows[0]["max_score"])*100
-                    plan = create_plan("gpt-4.1-mini",v54_subject,v54_grade,v54_skill,
-                                       before_pct,"العربية",v54_notes,"طالب مجهول",v54_threshold)
-                    quiz = create_quiz("gpt-4.1-mini",v54_subject,v54_grade,v54_skill,"العربية")
-                    if not isinstance(plan,str) or len(plan.strip()) < 100 or not isinstance(quiz,str) or len(quiz.strip()) < 40:
-                        raise ValueError("الخطة أو الاختبار غير مكتملين")
-                    st.session_state["v54_generated"] = {"school":v54_school,"student_code":v54_code.strip(),
-                        "skill":v54_skill.strip(),"subject":v54_subject,"grade":v54_grade,
-                        "before":before_pct,"plan":plan,"quiz":quiz,"threshold":v54_threshold}
-                    st.success("تم التوليد. راجع المخرجات ثم أرسلها للمدير.")
-                except Exception as e:
-                    st.error("تعذر التوليد: "+str(e)[:350])
-            generated = st.session_state.get("v54_generated",{})
-            if generated.get("school") == v54_school:
-                with st.expander("الخطة المقترحة — راجعها", expanded=True):st.write(generated["plan"])
-                with st.expander("الاختبار المقترح — راجعه", expanded=True):st.write(generated["quiz"])
-                v54_review = st.checkbox("راجعت المقترح وأوافق على إرساله للمدير (ليس اعتمادًا نهائيًا)", key="v54_review")
-                if st.button("📨 إرسال المقترح لاعتماد المدير", disabled=not v54_review, key="v54_submit"):
-                    try:
-                        row = {"school_id":v54_school,"created_by":v54_uid,
-                               "student_code":generated["student_code"],"skill":generated["skill"],
-                               "subject":generated["subject"],"grade":generated["grade"],
-                               "baseline_pct":generated["before"],"threshold_pct":generated["threshold"],
-                               "plan_text":generated["plan"],"quiz_text":generated["quiz"],"status":"pending"}
-                        v54_client.table("mueen_workflow_drafts").insert(row).execute()
-                        st.success("تم إرسال المقترح للمدير؛ حدّث الصفحة لرؤيته.")
-                    except Exception as e:st.error("فشل إرسال المقترح: "+str(e)[:350])
-        with st.expander("③ اعتماد المدير وحفظ الخطة", expanded=v54_manage):
-            if not v54_manage:
-                st.info("هذا القسم متاح للمدير والمنسق فقط. المقترح ينتظر مراجعة حساب المدير.")
+                    if not v55_code.strip() or not v55_skill.strip() or v55_score>v55_max:
+                        raise ValueError("تحقق من الرمز والمهارة والدرجات")
+                    typ = "baseline" if v55_kind=="قبلي" else "follow_up"
+                    previous = (v55_client.table("assessment_records").select("id,score,max_score,created_at")
+                        .eq("school_id",v55_school).eq("student_code",v55_code.strip())
+                        .eq("skill",v55_skill.strip()).eq("assessment_type",typ)
+                        .order("created_at",desc=True).limit(1).execute().data or [])
+                    if previous and float(previous[0]["score"])==float(v55_score) and float(previous[0]["max_score"])==float(v55_max):
+                        st.warning("يوجد تقييم حديث بنفس الدرجة. تحقق من المحاولات أدناه قبل إنشاء نسخة أخرى.")
+                    else:
+                        save_assessment_records([{"student_code":v55_code.strip(),"skill":v55_skill.strip(),
+                            "assessment_type":typ,"score":v55_score,"max_score":v55_max}])
+                        st.success("تم حفظ محاولة جديدة. حدّث الصفحة لعرض معرفها.")
+                except Exception as e:st.error("تعذر الحفظ: "+str(e)[:350])
+            v55_assessments=(v55_client.table("assessment_records").select("id,student_code,skill,assessment_type,score,max_score,created_at")
+                .eq("school_id",v55_school).eq("student_code",v55_code.strip()).eq("skill",v55_skill.strip())
+                .order("created_at",desc=True).limit(100).execute().data or []) if v55_code.strip() and v55_skill.strip() else []
+            st.dataframe(pd.DataFrame(v55_assessments),use_container_width=True,hide_index=True)
+        with st.expander("② إنشاء مقترح مرتبط بتقييم قبلي محدد",expanded=True):
+            baselines=[r for r in v55_assessments if r["assessment_type"]=="baseline"]
+            if not baselines:st.info("سجّل تقييمًا قبليًا أولًا.")
             else:
-                pending = [r for r in v54_drafts if r.get("status")=="pending"]
-                if not pending:st.info("لا توجد مقترحات معلقة. حدّث الصفحة بعد إرسال المعلم.")
-                else:
-                    ids = [str(r["id"]) for r in pending]
-                    selected = st.selectbox("اختر مقترحًا",ids,format_func=lambda x: next((f'{r["student_code"]} | {r["skill"]} | {x[:8]}' for r in pending if str(r["id"])==x),x),key="v54_select")
-                    draft = next(r for r in pending if str(r["id"])==selected)
-                    st.write("الخطة:"); st.write(draft["plan_text"])
-                    st.write("الاختبار:");st.write(draft["quiz_text"])
-                    approved_text = st.text_area("الخطة بعد مراجعة المدير",value=draft["plan_text"],height=200,key="v54_approved_text")
-                    manager_ok = st.checkbox("أؤكد مراجعة الخطة والاختبار وصحة المحتوى",key="v54_manager_ok")
-                    if st.button("✅ اعتماد وحفظ الخطة",disabled=not manager_ok,key="v54_approve"):
-                        try:
-                            existing = (v54_client.table("mueen_workflow_drafts")
-                                        .select("status").eq("id",selected).eq("school_id",v54_school).single().execute().data)
-                            if existing.get("status")!="pending":raise ValueError("سبق التعامل مع المقترح.")
-                            saved = v54_client.table("intervention_plans").insert({
-                                "school_id":v54_school,"plan_title":f'تدخل {draft["skill"]} | {draft["student_code"]}',
-                                "learning_gap":f'{draft["skill"]} — {draft["baseline_pct"]:.1f}%',
-                                "intervention_strategy":approved_text,
-                                "success_criteria":f'حد الإتقان {draft["threshold_pct"]}%',
-                                "plan_status":"approved","created_by":v54_uid
-                            }).execute().data or []
-                            if not saved:raise ValueError("لم يُرجع حفظ الخطة سجلًا")
-                            plan_id = saved[0]["id"]
-                            v54_client.table("mueen_workflow_drafts").update({
-                                "status":"approved","approved_by":v54_uid,"intervention_plan_id":plan_id
-                            }).eq("id",selected).eq("status","pending").execute()
-                            st.success("حُفظت الخطة؛ معرّفها: "+str(plan_id))
-                        except Exception as e:st.error("تعذر الاعتماد: "+str(e)[:350])
-        with st.expander("④ متابعة التنفيذ والنتيجة البعدية", expanded=True):
-            st.caption("المعلم يسجل التقييم البعدي من القسم ①. المدير/المنسق يوثّق تنفيذ النشاط بعد حدوثه.")
-            approved = [r for r in v54_drafts if r.get("status")=="approved"]
-            if approved:
-                chosen = st.selectbox("الخطة المعتمدة", [str(r["id"]) for r in approved],
-                    format_func=lambda x:next((f'{r["student_code"]} | {r["skill"]}' for r in approved if str(r["id"])==x),x),key="v54_approved_select")
-                d = next(r for r in approved if str(r["id"])==chosen)
-                activity = st.text_area("ما تم تنفيذه فعليًا",key="v54_activity")
-                teacher_notes = st.text_area("ملاحظات المتابعة",key="v54_follow_notes")
-                if v54_manage and st.button("💾 حفظ المتابعة الفعلية",key="v54_save_followup"):
+                v55_base_id=st.selectbox("اختر محاولة التقييم القبلي (المعرف والتاريخ والدرجة)",
+                    [str(r["id"]) for r in baselines],format_func=lambda x:next(
+                    (f'{r["created_at"]} | {r["score"]}/{r["max_score"]} | {x[:8]}' for r in baselines if str(r["id"])==x),x),key="v55_baseline_id")
+                v55_threshold=st.number_input("حد الإتقان %",min_value=1,max_value=100,value=80,key="v55_threshold")
+                v55_notes=st.text_area("ملاحظات المعلم",key="v55_notes")
+                v55_demo=st.checkbox("هذه بيانات تجريبية/محاكاة وليست نتائج حقيقية",value=True,key="v55_demo")
+                if st.button("🤖 توليد الخطة والاختبار",key="v55_generate"):
                     try:
-                        if not activity.strip():raise ValueError("اكتب النشاط المنفذ فعليًا.")
-                        rows = (v54_client.table("assessment_records").select("score,max_score")
-                            .eq("school_id",v54_school).eq("student_code",d["student_code"])
-                            .eq("skill",d["skill"]).eq("assessment_type","follow_up").execute().data or [])
-                        if len(rows)!=1:raise ValueError("يلزم تقييم بعدي واحد محفوظ؛ الموجود: "+str(len(rows)))
-                        after_pct=float(rows[0]["score"])/float(rows[0]["max_score"])*100
-                        rec,delta=decide(float(d["baseline_pct"]),after_pct,float(d["threshold_pct"]))
-                        v54_client.table("intervention_followups").insert({
-                            "school_id":v54_school,"intervention_plan_id":d["intervention_plan_id"],
-                            "followup_date":datetime.now().date().isoformat(),
-                            "activity_completed":activity,"teacher_notes":teacher_notes,
-                            "progress_percentage":after_pct,"next_action":rec,"recorded_by":v54_uid
-                        }).execute()
-                        st.success(f"حُفظت المتابعة: {d['baseline_pct']:.1f}% ← {after_pct:.1f}% ({delta:+.1f} نقطة)")
-                    except Exception as e:st.error("تعذر حفظ المتابعة: "+str(e)[:350])
-                elif not v54_manage:st.info("بعد إدخال التقييم البعدي، يتولى المدير حفظ المتابعة وفق RLS الحالية.")
-            else:st.info("لا توجد خطة معتمدة بعد.")
-        with st.expander("⑤ التقرير النهائي القابل للتنزيل", expanded=True):
-            report_rows=[]
-            for d in v54_drafts:
-                record={"رمز الطالب":d.get("student_code"),"المهارة":d.get("skill"),
-                        "الحالة":d.get("status"),"القبلي %":d.get("baseline_pct"),
-                        "معرف الخطة":d.get("intervention_plan_id")}
-                try:
-                    post = (v54_client.table("assessment_records").select("score,max_score")
-                            .eq("school_id",v54_school).eq("student_code",d["student_code"])
-                            .eq("skill",d["skill"]).eq("assessment_type","follow_up").execute().data or [])
-                    if len(post)==1:
-                        after=float(post[0]["score"])/float(post[0]["max_score"])*100
-                        record["البعدي %"]=round(after,2)
-                        record["التغير (نقطة)"]=round(after-float(d["baseline_pct"]),2)
-                    else:record["البعدي %"]="لم يُتحقق من تقييم بعدي وحيد"
-                except Exception as e:record["البعدي %"]="تعذر القراءة: "+str(e)[:80]
-                report_rows.append(record)
-            if report_rows:
-                df54=pd.DataFrame(report_rows)
-                st.dataframe(df54,use_container_width=True,hide_index=True)
-                st.download_button("📥 تنزيل تقرير سير العمل CSV",df54.to_csv(index=False).encode("utf-8-sig"),
-                                   "MUEEN_V5_4_Workflow_Report.csv","text/csv",key="v54_download")
-            else:st.info("لا توجد مقترحات محفوظة بعد.")
+                        br=next(r for r in baselines if str(r["id"])==v55_base_id)
+                        pct=100*float(br["score"])/float(br["max_score"])
+                        plan=create_plan("gpt-4.1-mini",v55_subject,v55_grade,v55_skill,pct,"العربية",v55_notes,"طالب مجهول",v55_threshold)
+                        quiz=create_quiz("gpt-4.1-mini",v55_subject,v55_grade,v55_skill,"العربية")
+                        if len(str(plan).strip())<100 or len(str(quiz).strip())<40:raise ValueError("المخرجات غير مكتملة")
+                        st.session_state["v55_generated"]={"school":v55_school,"code":v55_code.strip(),"skill":v55_skill.strip(),
+                            "subject":v55_subject,"grade":v55_grade,"baseline_id":v55_base_id,"before":pct,
+                            "threshold":v55_threshold,"plan":plan,"quiz":quiz,"demo":v55_demo}
+                        st.success("تم التوليد؛ راجع المخرجات ثم أرسل المقترح.")
+                    except Exception as e:st.error("فشل التوليد: "+str(e)[:350])
+                gen=st.session_state.get("v55_generated",{})
+                if gen.get("school")==v55_school:
+                    st.write("**الخطة:**");st.write(gen["plan"])
+                    st.write("**الاختبار:**");st.write(gen["quiz"])
+                    v55_review=st.checkbox("راجعت المقترح وأوافق على إرساله للمدير",key="v55_review")
+                    if st.button("📨 إرسال المقترح",disabled=not v55_review,key="v55_submit"):
+                        try:
+                            payload={"school_id":v55_school,"created_by":v55_uid,"student_code":gen["code"],
+                                "skill":gen["skill"],"subject":gen["subject"],"grade":gen["grade"],
+                                "baseline_pct":gen["before"],"threshold_pct":gen["threshold"],
+                                "plan_text":gen["plan"],"quiz_text":gen["quiz"],"status":"pending",
+                                "baseline_assessment_id":gen["baseline_id"],"is_demo":gen["demo"]}
+                            dup=[d for d in v55_drafts if d.get("created_by")==v55_uid and d.get("student_code")==gen["code"]
+                                 and d.get("skill")==gen["skill"] and d.get("status")=="pending"]
+                            if dup:raise ValueError("لديك مقترح معلّق للمهارة نفسها. راجعه قبل إرسال مقترح آخر.")
+                            v55_client.table("mueen_workflow_drafts").insert(payload).execute()
+                            st.session_state.pop("v55_generated",None)
+                            st.success("أُرسل المقترح. حدّث الصفحة ليظهر في حساب المدير.")
+                        except Exception as e:st.error("تعذر الإرسال: "+str(e)[:350])
+        with st.expander("③ اعتماد المدير — معاملة ذرّية تمنع التكرار",expanded=v55_manage):
+            pending=[d for d in v55_drafts if d.get("status")=="pending"]
+            if not v55_manage:st.info("الاعتماد للمدير أو المنسق فقط.")
+            elif not pending:st.info("لا توجد مقترحات معلقة.")
+            else:
+                draft_id=st.selectbox("اختر المقترح",[str(d["id"]) for d in pending],key="v55_approve_id")
+                d=next(d for d in pending if str(d["id"])==draft_id)
+                st.caption("بيانات تجريبية" if d.get("is_demo",True) else "بيانات تشغيلية — يلزم تحقق بشري")
+                st.write(d["quiz_text"])
+                approved_text=st.text_area("الخطة بعد المراجعة",value=d["plan_text"],height=180,key="v55_approved_text")
+                manager_ok=st.checkbox("راجعت الخطة والاختبار وأوافق على الاعتماد",key="v55_manager_ok")
+                if st.button("✅ اعتماد الخطة مرة واحدة",disabled=not manager_ok,key="v55_approve"):
+                    try:
+                        result=v55_client.rpc("mueen_v55_approve",{"p_draft_id":draft_id,"p_reviewed_plan":approved_text}).execute().data
+                        st.success("الخطة معتمدة، معرّفها: "+str(result)+". العملية آمنة عند تكرار الضغط.")
+                    except Exception as e:st.error("تعذر الاعتماد: "+str(e)[:350])
+        with st.expander("④ ربط تقييم بعدي محدد وتوثيق المتابعة",expanded=True):
+            approved=[d for d in v55_drafts if d.get("status")=="approved" and d.get("intervention_plan_id")]
+            if not approved:st.info("لا توجد خطط معتمدة.")
+            else:
+                chosen=st.selectbox("اختر الخطة المعتمدة",[str(d["id"]) for d in approved],
+                    format_func=lambda x:next((f'{d["student_code"]} | {d["skill"]} | {x[:8]}' for d in approved if str(d["id"])==x),x),key="v55_follow_draft")
+                d=next(d for d in approved if str(d["id"])==chosen)
+                if d.get("followup_assessment_id"):
+                    st.success("تم ربط المتابعة بهذه الخطة. التقييم البعدي: "+str(d["followup_assessment_id"]))
+                else:
+                    posts=(v55_client.table("assessment_records").select("id,score,max_score,created_at")
+                        .eq("school_id",v55_school).eq("student_code",d["student_code"])
+                        .eq("skill",d["skill"]).eq("assessment_type","follow_up")
+                        .order("created_at",desc=True).limit(100).execute().data or [])
+                    if not posts:st.info("سجّل تقييمًا بعديًا من القسم ①.")
+                    else:
+                        post_id=st.selectbox("اختر المحاولة البعدية المقصودة (لا اختيار تلقائي لأعلى نتيجة)",
+                            [str(r["id"]) for r in posts],format_func=lambda x:next(
+                            (f'{r["created_at"]} | {r["score"]}/{r["max_score"]} | {x[:8]}' for r in posts if str(r["id"])==x),x),key="v55_post_id")
+                        activity=st.text_area("وصف النشاط المنفذ — في المحاكاة اذكر أنه افتراضي",key="v55_activity")
+                        notes=st.text_area("ملاحظات المتابعة",key="v55_follow_notes")
+                        if v55_manage and st.button("💾 ربط التقييم وحفظ المتابعة",key="v55_save_follow"):
+                            try:
+                                if not activity.strip():raise ValueError("اكتب وصف النشاط.")
+                                if d.get("is_demo",True) and not st.session_state.get("v55_confirm_demo",False):
+                                    raise ValueError("فعّل تأكيد المحاكاة قبل الحفظ.")
+                                res=v55_client.rpc("mueen_v55_record_followup",{
+                                    "p_draft_id":chosen,"p_assessment_id":post_id,
+                                    "p_activity":activity,"p_notes":notes}).execute().data
+                                st.success("حُفظت المتابعة وربطت بالمحاولة المختارة: "+str(res))
+                            except Exception as e:st.error("تعذر حفظ المتابعة: "+str(e)[:350])
+                        if d.get("is_demo",True):st.checkbox("أؤكد أن هذا النشاط والدرجات محاكاة وليست دليل تنفيذ فعلي",key="v55_confirm_demo")
+                        if not v55_manage:st.info("يحفظ المدير/المنسق المتابعة بعد اختيار المحاولة.")
+        with st.expander("⑤ تقرير الدورة مع تمييز البيانات التجريبية",expanded=True):
+            report=[]
+            for d in v55_drafts:
+                row={"معرف المقترح":d["id"],"المدرسة":v55_school,"رمز الطالب":d["student_code"],
+                    "المهارة":d["skill"],"نوع البيانات":"تجريبية" if d.get("is_demo",True) else "تشغيلية",
+                    "حالة الاعتماد":d["status"],"معرف الخطة":d.get("intervention_plan_id"),
+                    "معرف التقييم القبلي":d.get("baseline_assessment_id"),
+                    "القبلي %":d["baseline_pct"],"معرف التقييم البعدي":d.get("followup_assessment_id"),
+                    "البعدي %":None,"التغير (نقطة)":None,"القرار": "بانتظار تقييم بعدي مرتبط"}
+                if d.get("followup_assessment_id"):
+                    try:
+                        matched=(v55_client.table("assessment_records").select("id,score,max_score,school_id,student_code,skill,assessment_type")
+                            .eq("id",str(d["followup_assessment_id"])).eq("school_id",v55_school).limit(1).execute().data or [])
+                        if len(matched)==1 and matched[0]["student_code"]==d["student_code"] and matched[0]["skill"]==d["skill"] and matched[0]["assessment_type"]=="follow_up":
+                            pct=100*float(matched[0]["score"])/float(matched[0]["max_score"])
+                            row["البعدي %"]=round(pct,2)
+                            row["التغير (نقطة)"]=round(pct-float(d["baseline_pct"]),2)
+                            row["القرار"]=decide(float(d["baseline_pct"]),pct,float(d["threshold_pct"]))[0]
+                        else:row["القرار"]="تعارض في ربط التقييم البعدي"
+                    except Exception as e:row["القرار"]="تعذر التحقق: "+str(e)[:60]
+                report.append(row)
+            if report:
+                frame=pd.DataFrame(report)
+                st.dataframe(frame,use_container_width=True,hide_index=True)
+                st.download_button("📥 تنزيل تقرير V5.5 CSV",frame.to_csv(index=False).encode("utf-8-sig"),
+                    "MUEEN_V5_5_Workflow_Report.csv","text/csv",key="v55_download")
+            else:st.info("لا توجد مقترحات بعد.")
 
 with mueen_page(6):
     st.markdown("## 🎓 V5.3 — اختبار التجربة التعليمية المتكاملة")
