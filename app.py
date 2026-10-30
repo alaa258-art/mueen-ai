@@ -413,7 +413,7 @@ def mueen_v5_save_plan(cycle, plan_title, strategy, criteria, student_id=None):
         "learning_gap": f"{cycle['skill']} — متوسط قبلي {cycle['before']:.1f}%",
         "intervention_strategy": strategy,
         "success_criteria": criteria,
-        "plan_status": "planned",
+        "plan_status": "approved"
         "created_by": get_current_user_id(client),
     }
     response = client.table("intervention_plans").insert(payload).execute()
