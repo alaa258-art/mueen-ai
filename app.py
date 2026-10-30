@@ -413,7 +413,7 @@ def mueen_v5_save_plan(cycle, plan_title, strategy, criteria, student_id=None):
         "learning_gap": f"{cycle['skill']} — متوسط قبلي {cycle['before']:.1f}%",
         "intervention_strategy": strategy,
         "success_criteria": criteria,
-        "plan_status": "approved"
+        "plan_status": "draft",
         "created_by": get_current_user_id(client),
     }
     response = client.table("intervention_plans").insert(payload).execute()
@@ -1444,7 +1444,7 @@ with mueen_page(6):
                                 "learning_gap":f'{draft["skill"]} — {draft["baseline_pct"]:.1f}%',
                                 "intervention_strategy":approved_text,
                                 "success_criteria":f'حد الإتقان {draft["threshold_pct"]}%',
-                                "plan_status":"planned","created_by":v54_uid
+                                "plan_status":"approved","created_by":v54_uid
                             }).execute().data or []
                             if not saved:raise ValueError("لم يُرجع حفظ الخطة سجلًا")
                             plan_id = saved[0]["id"]
