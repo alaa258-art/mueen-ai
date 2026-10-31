@@ -1422,7 +1422,7 @@ with mueen_page(6):
                                 "skill":gen["skill"],"subject":gen["subject"],"grade":gen["grade"],
                                 "baseline_pct":gen["before"],"threshold_pct":gen["threshold"],
                                 "plan_text":gen["plan"],"quiz_text":gen["quiz"],"status":"pending",
-                                "baseline_assessment_id":gen["baseline_id"],"is_demo":gen["demo"]}
+                                "baseline_assessment_id":int(gen["baseline_id"]),"is_demo":gen["demo"]}
                             dup=[d for d in v55_drafts if d.get("created_by")==v55_uid and d.get("student_code")==gen["code"]
                                  and d.get("skill")==gen["skill"] and d.get("status")=="pending"]
                             if dup:raise ValueError("لديك مقترح معلّق للمهارة نفسها. راجعه قبل إرسال مقترح آخر.")
@@ -1473,7 +1473,7 @@ with mueen_page(6):
                                 if d.get("is_demo",True) and not st.session_state.get("v55_confirm_demo",False):
                                     raise ValueError("فعّل تأكيد المحاكاة قبل الحفظ.")
                                 res=v55_client.rpc("mueen_v55_record_followup",{
-                                    "p_draft_id":chosen,"p_assessment_id":post_id,
+                                    "p_draft_id":chosen,"p_assessment_id":int(post_id),
                                     "p_activity":activity,"p_notes":notes}).execute().data
                                 st.success("حُفظت المتابعة وربطت بالمحاولة المختارة: "+str(res))
                             except Exception as e:st.error("تعذر حفظ المتابعة: "+str(e)[:350])
