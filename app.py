@@ -1568,6 +1568,56 @@ with mueen_page(6):
             .eq("school_id",v6_school).order("created_at",desc=True).limit(200).execute().data or [])
         completed = [d for d in v6_drafts if d.get("baseline_assessment_id") is not None and d.get("followup_assessment_id") is not None]
         st.metric("الدورات السابقة المحفوظة في ذاكرة الوكيل",len(v6_cycles))
+        # V6.1: one-click consolidated, read-only evidence and quality audit.
+        with st.expander("🧪 V6.1 — الفحص الشامل الموحد (قراءة فقط)", expanded=True):
+            st.caption("فحص الذاكرة، استقلال المقترحات، روابط التقييم، وملاحظات جودة الاختبار. لا يكتب إلى Supabase.")
+            if st.button("▶ تشغيل الفحص الشامل مرة واحدة", key="v61_integrated_audit"):
+                audit = []
+                def check(name, ok, detail):
+                    audit.append({"الفحص": name, "الحالة": "نجاح" if ok else "يحتاج إجراء", "التفاصيل": detail})
+                first = next((c for c in v6_cycles if
+                    str(c.get("student_code")) == "PILOT-MATH-01"
+                    and str(c.get("skill")) == "ترتيب خطوات الحل"
+                    and c.get("review_status") == "approved"), None)
+                check("ذاكرة الدورة الأولى", first is not None,
+                      "دورة أولى معتمدة موجودة" if first else "لم توجد دورة أولى معتمدة")
+                related = [d for d in v6_drafts if
+                    str(d.get("student_code")) == "PILOT-MATH-01"
+                    and str(d.get("skill")) == "ترتيب خطوات الحل"]
+                check("وجود المقترحات", bool(related), f"عدد المقترحات المعتمدة: {len(related)}")
+                second = [d for d in related if first and
+                    str(d.get("id")) != str(first.get("source_draft_id"))]
+                complete = [d for d in second if
+                    d.get("baseline_assessment_id") is not None and
+                    d.get("followup_assessment_id") is not None and
+                    str(d.get("baseline_assessment_id")) != str(d.get("followup_assessment_id"))]
+                check("اكتمال مقترح ثانٍ مستقل", bool(complete),
+                      f"مقترحات مستقلة: {len(second)}؛ مكتملة مبدئيًا: {len(complete)}")
+                base_usage = {}
+                for d in second:
+                    base_id = d.get("baseline_assessment_id")
+                    if base_id is not None:
+                        base_usage.setdefault(str(base_id), []).append(str(d.get("id"))[:8])
+                duplicates = {k: v for k, v in base_usage.items() if len(v) > 1}
+                check("عدم مشاركة تقييم قبلي بين مقترحين", not duplicates,
+                      "لا يوجد تكرار" if not duplicates else f"تقييمات مشتركة: {duplicates}")
+                check("تمييز البيانات التجريبية",
+                      bool(related) and all(d.get("is_demo") is True for d in related),
+                      "كل المقترحات المعنية موسومة تجريبية" if related else "لا توجد مقترحات")
+                check("مراجعة جودة الاختبار", False,
+                      "يلزم اعتماد بشري لصحة المسائل ومفتاح الإجابة وسلم الدرجات؛ لا يكفي توليد الذكاء الاصطناعي.")
+                check("إثبات تنفيذ التدخل الثاني", False,
+                      "لا يمكن إثبات تنفيذ النشاط من سجلات المقترحات والتقييمات وحدها.")
+                check("إثبات تكيف الوكيل من الذاكرة", False,
+                      "يلزم سجل قرار يبين كيف أثرت ذاكرة الدورة الأولى في اختيار التدخل الثاني.")
+                st.dataframe(pd.DataFrame(audit), use_container_width=True, hide_index=True)
+                passed = sum(r["الحالة"] == "نجاح" for r in audit)
+                st.info(f"نتيجة الفحص: {passed} من {len(audit)} ناجحة. الفحوص غير المثبتة ليست نجاحًا.")
+                st.download_button("📥 تنزيل تقرير V6.1 CSV",
+                    pd.DataFrame(audit).to_csv(index=False).encode("utf-8-sig"),
+                    "MUEEN_V6_1_Integrated_Audit.csv", "text/csv",
+                    key="v61_integrated_audit_csv")
+                st.warning("تنبيه جودة: في اختبار المقترح 02baedb4، حل 2y-4=10 يتطلب جمع 4، وليس طرحها. راجع مفتاح الإجابة وتوزيع الدرجات قبل أي تقييم بعدي.")
         # V6.1 first milestone: real-record evidence preview; no DB writes.
         with st.expander("🔬 V6.1 — فحص التكيف بين دورتين فعليتين (قراءة فقط)", expanded=False):
             st.caption("يتطلب دورتين مختلفتين لنفس رمز الطالب والمهارة، واعتماد الدورة الأولى، وربط تقييمين مستقلين بالدورة الثانية. لا يحفظ قرارًا أو ينفذ تدخلًا.")
