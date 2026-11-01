@@ -1507,6 +1507,103 @@ with mueen_page(6):
                     "MUEEN_V5_5_Workflow_Report.csv","text/csv",key="v55_download")
             else:st.info("لا توجد مقترحات بعد.")
 
+    # V6.0: advisory adaptive agent. No automatic approvals or real-world actions.
+    st.markdown("---")
+    st.markdown("## 🧠 V6.0 — الوكيل التعليمي التكيفي (نسخة تجريبية)")
+    st.caption("ذاكرة موثقة + تحليل فجوة + تفسير القرار + اقتراح تدخل ثانٍ للمراجعة البشرية. لا يعتمد أو ينفذ تلقائيًا.")
+    try:
+        v6_client = get_supabase()
+        v6_school = str(get_selected_school_id())
+        v6_user = get_current_user_id(v6_client)
+        v6_role = str(st.session_state.get("mueen_school_role", "")).lower()
+        v6_manager = v6_role in ("principal", "coordinator")
+        v6_drafts = (v6_client.table("mueen_workflow_drafts").select("*")
+            .eq("school_id",v6_school).eq("status","approved")
+            .order("created_at",desc=True).limit(200).execute().data or [])
+        v6_cycles = (v6_client.table("mueen_agent_cycles").select("*")
+            .eq("school_id",v6_school).order("created_at",desc=True).limit(200).execute().data or [])
+        completed = [d for d in v6_drafts if d.get("baseline_assessment_id") is not None and d.get("followup_assessment_id") is not None]
+        st.metric("الدورات السابقة المحفوظة في ذاكرة الوكيل",len(v6_cycles))
+        if not completed:
+            st.info("لا توجد دورة V5.5 مكتملة الربط في المدرسة المختارة. اربط تقييمًا بعديًا أولًا.")
+        else:
+            selected = st.selectbox("اختر دورة مكتملة لتحليلها",[str(d["id"]) for d in completed],
+                format_func=lambda x:next((f'{d["student_code"]} | {d["skill"]} | {x[:8]}' for d in completed if str(d["id"])==x),x),key="v6_source")
+            source = next(d for d in completed if str(d["id"])==selected)
+            old = next((c for c in v6_cycles if str(c["source_draft_id"])==selected),None)
+            history = [c for c in v6_cycles if c["student_code"]==source["student_code"] and c["skill"]==source["skill"]]
+            st.write("**ذاكرة المهارة:**",len(history),"دورة/دورات تحليل محفوظة في المدرسة الحالية")
+            if old:
+                st.success("هذه الدورة حُللت وحُفظت سابقًا. يمنع النظام تكرار تحليل المصدر نفسه.")
+                st.write("**القرار المحفوظ:**",old.get("decision_text",""))
+                st.write("**الاقتراح المحفوظ:**",old.get("proposed_strategy",""))
+                st.write("**حالة المراجعة:**",old.get("review_status","pending"))
+            else:
+                if st.button("🔎 تحليل الأدلة وبناء قرار مفسّر",key="v6_analyse"):
+                    try:
+                        ids=[int(source["baseline_assessment_id"]),int(source["followup_assessment_id"])]
+                        rows=(v6_client.table("assessment_records").select("id,school_id,student_code,skill,assessment_type,score,max_score")
+                            .eq("school_id",v6_school).in_("id",ids).execute().data or [])
+                        by_id={int(r["id"]):r for r in rows}
+                        b=by_id.get(ids[0]);f=by_id.get(ids[1])
+                        if not b or not f or ids[0]==ids[1]:raise ValueError("التقييمان غير موجودين أو غير مستقلين.")
+                        if any(r["student_code"]!=source["student_code"] or r["skill"]!=source["skill"] for r in (b,f)):
+                            raise ValueError("اختلاف الطالب أو المهارة بين التقييمات.")
+                        if b["assessment_type"]!="baseline" or f["assessment_type"]!="follow_up":raise ValueError("نوع التقييم غير متوافق.")
+                        if float(b["max_score"])<=0 or float(f["max_score"])<=0:raise ValueError("الدرجة الكلية غير صحيحة.")
+                        before=100*float(b["score"])/float(b["max_score"])
+                        after=100*float(f["score"])/float(f["max_score"])
+                        target=float(source["threshold_pct"])
+                        delta=after-before
+                        if after>=target:
+                            outcome="mastered"; reason="بلغ حد الإتقان المحدد؛ يلزم تحقق المعلم قبل إغلاق الدورة."
+                            suggestion="نشاط تثبيت وتطبيق في سياق جديد مع اختبار احتفاظ لاحق."
+                        elif delta>0:
+                            outcome="partial"; reason="تحسن الأداء لكن النتيجة لا تزال أقل من حد الإتقان."
+                            suggestion="تدريب متدرج على الخطوات التي بقيت صعبة، مع تغذية راجعة فردية وتقييم جديد."
+                        else:
+                            outcome="stagnant"; reason="لم يظهر تحسن موجب في المحاولة المختارة؛ لا يمكن الجزم بسبب الإخفاق من الدرجات وحدها."
+                            suggestion="غيّر طريقة الشرح إلى نموذج محلول بصوت عالٍ، ثم نشاط ترتيب بطاقات الخطوات مع تغذية راجعة فورية."
+                        if history:
+                            previous=[str(c.get("proposed_strategy",""))[:160] for c in history[:3]]
+                            reason += " تمت مراجعة %s دورة محفوظة سابقة؛ راجع الاستراتيجيات السابقة لتجنب تكرارها." % len(history)
+                        else: previous=[]
+                        st.session_state["v6_analysis"]={"school_id":v6_school,"source_draft_id":selected,
+                            "student_code":source["student_code"],"skill":source["skill"],"is_demo":bool(source.get("is_demo",True)),
+                            "baseline_assessment_id":ids[0],"followup_assessment_id":ids[1],
+                            "baseline_pct":round(before,2),"followup_pct":round(after,2),"threshold_pct":target,
+                            "delta_pct_points":round(delta,2),"outcome":outcome,"decision_text":reason,
+                            "proposed_strategy":suggestion,"memory_summary":" | ".join(previous),"created_by":v6_user}
+                    except Exception as exc:st.error("تعذر التحليل: "+str(exc)[:300])
+                analysis=st.session_state.get("v6_analysis")
+                if analysis and analysis.get("source_draft_id")==selected and analysis.get("school_id")==v6_school:
+                    st.write("**القبلي / البعدي / التغير:**",f'{analysis["baseline_pct"]}% / {analysis["followup_pct"]}% / {analysis["delta_pct_points"]:+.1f} نقطة')
+                    st.write("**تفسير القرار:**",analysis["decision_text"])
+                    st.write("**استراتيجية بديلة مقترحة:**",analysis["proposed_strategy"])
+                    st.warning("التحليل قائم على قواعد قابلة للتدقيق؛ ليس تشخيصًا لسبب ضعف الطالب، ولا دليلًا على أثر تعليمي حقيقي.")
+                    confirmed=st.checkbox("راجعت الأدلة وأوافق على حفظ الاقتراح للمراجعة البشرية فقط",key="v6_confirm")
+                    if st.button("💾 حفظ القرار والذاكرة وسجل التدقيق",disabled=not confirmed,key="v6_save"):
+                        try:
+                            v6_client.table("mueen_agent_cycles").insert(analysis).execute()
+                            st.session_state.pop("v6_analysis",None)
+                            st.success("حُفظ تحليل الوكيل. حدّث الصفحة لعرض الذاكرة والمراجعة.")
+                        except Exception as exc:st.error("تعذر حفظ دورة الوكيل: "+str(exc)[:350])
+            if old and v6_manager and old.get("review_status")=="pending":
+                with st.expander("👨‍💼 مراجعة المدير للاقتراح",expanded=True):
+                    decision=st.radio("قرار المدير",["approved","rejected"],format_func=lambda x:"الموافقة على المقترح للمراجعة التعليمية" if x=="approved" else "رفض المقترح",key="v6_manager_decision")
+                    review_notes=st.text_area("مبررات القرار",key="v6_review_notes")
+                    if st.button("📝 تسجيل قرار المراجعة",key="v6_review_save"):
+                        try:
+                            if len(review_notes.strip())<8:raise ValueError("اكتب مبررًا لا يقل عن 8 أحرف.")
+                            v6_client.rpc("mueen_v6_review_cycle",{"p_cycle_id":str(old["id"]),"p_decision":decision,"p_notes":review_notes}).execute()
+                            st.success("حُفظ قرار المراجعة؛ لا ينشئ هذا الإجراء خطة جديدة أو ينفذ تدخلًا.")
+                        except Exception as exc:st.error("تعذر حفظ قرار المدير: "+str(exc)[:350])
+        if v6_cycles:
+            st.download_button("📥 تقرير ذاكرة الوكيل V6.0 (CSV)",pd.DataFrame(v6_cycles).to_csv(index=False).encode("utf-8-sig"),
+                "MUEEN_V6_Agent_Memory.csv","text/csv",key="v6_export")
+    except Exception as exc:
+        st.error("تعذر تشغيل V6.0. نفذ ترحيل قاعدة البيانات أولًا: "+str(exc)[:350])
+
 with mueen_page(6):
     st.markdown("## 🎓 V5.3 — اختبار التجربة التعليمية المتكاملة")
     st.info("اختبار تقني متكامل ببيانات افتراضية: يولد خطة واختبارًا عبر OpenAI، ويحفظ التقييمين والخطة والمتابعة في Supabase، ثم يتحقق من استرجاعها.")
