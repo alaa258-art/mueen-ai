@@ -1507,6 +1507,50 @@ with mueen_page(6):
                     "MUEEN_V5_5_Workflow_Report.csv","text/csv",key="v55_download")
             else:st.info("لا توجد مقترحات بعد.")
 
+    # V6.1: evidence-based second-cycle candidate (read-only until schema and RLS review).
+    def v61_candidate(previous, current, baseline, followup):
+        """Compute a second-cycle recommendation using actual linked assessments."""
+        if str(previous.get("source_draft_id")) == str(current.get("id")):
+            raise ValueError("لا يجوز إعادة استخدام مصدر الدورة السابقة.")
+        if previous.get("review_status") != "approved":
+            raise ValueError("يجب اعتماد الدورة السابقة بشريًا أولًا.")
+        if (str(previous.get("student_code")) != str(current.get("student_code"))
+                or str(previous.get("skill")) != str(current.get("skill"))):
+            raise ValueError("يجب تطابق رمز الطالب والمهارة بين الدورتين.")
+        if any(str(r.get("student_code")) != str(current.get("student_code"))
+               or str(r.get("skill")) != str(current.get("skill")) for r in (baseline, followup)):
+            raise ValueError("سجلات التقييم لا تطابق الطالب والمهارة.")
+        if baseline.get("assessment_type") != "baseline" or followup.get("assessment_type") != "follow_up":
+            raise ValueError("يجب وجود تقييم قبلي وتقييم بعدي مستقلين.")
+        if str(baseline.get("id")) == str(followup.get("id")):
+            raise ValueError("لا يجوز استخدام التقييم نفسه مرتين.")
+        for r in (baseline, followup):
+            score, maximum = float(r["score"]), float(r["max_score"])
+            if maximum <= 0 or not 0 <= score <= maximum:
+                raise ValueError("درجات التقييم غير صالحة.")
+        before = 100 * float(baseline["score"]) / float(baseline["max_score"])
+        after = 100 * float(followup["score"]) / float(followup["max_score"])
+        target = float(current.get("threshold_pct") or previous.get("threshold_pct") or 80)
+        delta = after - before
+        if after >= target:
+            strategy = "نشاط إثرائي وتقييم احتفاظ لاحق، بعد تحقق المعلم من صلاحية أداة القياس."
+            outcome = "mastered"
+        elif delta > 0:
+            strategy = "تدريب موجه على الأخطاء المتبقية، ثم تقييم متابعة مستقل بإشراف المعلم."
+            outcome = "partial"
+        else:
+            strategy = "تحليل أخطاء خطوات الحل بمثال خاطئ مقصود، ثم نقاش تبرير ترتيب الخطوات وتقييم مستقل."
+            outcome = "stagnant"
+        old_strategy = str(previous.get("proposed_strategy") or "").strip()
+        if strategy == old_strategy:
+            raise ValueError("الاستراتيجية الجديدة مطابقة حرفيًا للسابقة؛ يلزم مراجعة بشرية.")
+        return {"baseline_pct": round(before, 2), "followup_pct": round(after, 2),
+                "delta_pct_points": round(delta, 2), "threshold_pct": target,
+                "outcome": outcome, "previous_cycle_id": str(previous["id"]),
+                "previous_strategy": old_strategy, "proposed_strategy": strategy,
+                "source_draft_id": str(current["id"]),
+                "explanation": "استُخدمت نتيجة الدورة الثانية الفعلية وقرار الدورة السابقة المعتمد؛ لا يمكن إثبات سبب التغير من الدرجات وحدها."}
+
     # V6.0: advisory adaptive agent. No automatic approvals or real-world actions.
     st.markdown("---")
     st.markdown("## 🧠 V6.0 — الوكيل التعليمي التكيفي (نسخة تجريبية)")
@@ -1524,6 +1568,54 @@ with mueen_page(6):
             .eq("school_id",v6_school).order("created_at",desc=True).limit(200).execute().data or [])
         completed = [d for d in v6_drafts if d.get("baseline_assessment_id") is not None and d.get("followup_assessment_id") is not None]
         st.metric("الدورات السابقة المحفوظة في ذاكرة الوكيل",len(v6_cycles))
+        # V6.1 first milestone: real-record evidence preview; no DB writes.
+        with st.expander("🔬 V6.1 — فحص التكيف بين دورتين فعليتين (قراءة فقط)", expanded=False):
+            st.caption("يتطلب دورتين مختلفتين لنفس رمز الطالب والمهارة، واعتماد الدورة الأولى، وربط تقييمين مستقلين بالدورة الثانية. لا يحفظ قرارًا أو ينفذ تدخلًا.")
+            candidates = []
+            for draft in completed:
+                previous_cycles = [c for c in v6_cycles
+                    if str(c.get("source_draft_id")) != str(draft.get("id"))
+                    and str(c.get("student_code")) == str(draft.get("student_code"))
+                    and str(c.get("skill")) == str(draft.get("skill"))
+                    and c.get("review_status") == "approved"
+                    and str(c.get("school_id")) == v6_school]
+                if previous_cycles:
+                    candidates.append((draft, previous_cycles[0]))
+            if not candidates:
+                st.info("لا توجد بعد دورة ثانية مستقلة مرتبطة بدورة أولى معتمدة. لن نختلق بيانات أو نكرر تحليل الدورة الأولى.")
+            else:
+                options = list(range(len(candidates)))
+                choice = st.selectbox("الدورة الثانية المرشحة", options,
+                    format_func=lambda i: f'{candidates[i][0].get("student_code")} | {candidates[i][0].get("skill")} | {str(candidates[i][0].get("id"))[:8]}',
+                    key="v61_candidate_select")
+                draft, previous = candidates[choice]
+                if st.button("🔎 فحص أدلة الدورة الثانية", key="v61_preview"):
+                    try:
+                        ids = [draft["baseline_assessment_id"], draft["followup_assessment_id"]]
+                        records = (v6_client.table("assessment_records")
+                            .select("id,school_id,student_code,skill,assessment_type,score,max_score,created_at")
+                            .eq("school_id", v6_school).in_("id", ids).execute().data or [])
+                        record_map = {str(r["id"]): r for r in records}
+                        if len(record_map) != 2 or any(str(i) not in record_map for i in ids):
+                            raise ValueError("تعذر استرجاع التقييمين المستقلين.")
+                        baseline, followup = (record_map[str(i)] for i in ids)
+                        if baseline.get("created_at") and followup.get("created_at") and baseline["created_at"] >= followup["created_at"]:
+                            raise ValueError("تاريخ التقييم البعدي يجب أن يكون بعد القبلي.")
+                        # Avoid reusing assessment IDs across the two attempts.
+                        previous_ids = {str(previous.get("baseline_assessment_id")), str(previous.get("followup_assessment_id"))}
+                        if any(str(i) in previous_ids for i in ids):
+                            raise ValueError("لا يجوز إعادة استخدام تقييم من الدورة السابقة.")
+                        result = v61_candidate(previous, draft, baseline, followup)
+                        st.success("تم تحليل سجلات دورة ثانية مستقلة، دون كتابة أي بيانات.")
+                        st.write("**الدورة السابقة المعتمدة:**", result["previous_cycle_id"])
+                        st.write("**الاستراتيجية السابقة:**", result["previous_strategy"] or "غير مسجلة")
+                        st.write("**نتائج الدورة الثانية:**", f'{result["baseline_pct"]}% → {result["followup_pct"]}% ({result["delta_pct_points"]:+.2f} نقطة)')
+                        st.write("**الاقتراح الجديد:**", result["proposed_strategy"])
+                        st.info(result["explanation"])
+                        st.warning("هذا فحص قراءة فقط؛ ليس اعتمادًا أو حفظًا لدورة V6.1. إثبات تنفيذ تدخل ثانٍ يحتاج دليلًا مستقلًا ومراجعة بشرية.")
+                    except Exception as exc:
+                        st.error("فشل فحص أدلة الدورة الثانية: " + str(exc)[:350])
+
         # V6.0: one-click, read-only memory/adaptation simulation.
         # This does not create a second real intervention cycle.
         with st.expander("🧪 اختبار الذاكرة والتكيف مرة واحدة (محاكاة آمنة)", expanded=False):
