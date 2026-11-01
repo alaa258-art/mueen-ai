@@ -1524,6 +1524,51 @@ with mueen_page(6):
             .eq("school_id",v6_school).order("created_at",desc=True).limit(200).execute().data or [])
         completed = [d for d in v6_drafts if d.get("baseline_assessment_id") is not None and d.get("followup_assessment_id") is not None]
         st.metric("الدورات السابقة المحفوظة في ذاكرة الوكيل",len(v6_cycles))
+        # V6.0: one-click, read-only memory/adaptation simulation.
+        # This does not create a second real intervention cycle.
+        with st.expander("🧪 اختبار الذاكرة والتكيف مرة واحدة (محاكاة آمنة)", expanded=False):
+            st.caption("يفحص الاسترجاع ويختبر قرارًا مختلفًا في سيناريو افتراضي؛ لا يكتب أي سجلات ولا يثبت تكيفًا فعليًا بين تدخلين.")
+            if st.button("▶ تشغيل اختبار الذاكرة والتكيف الشامل", key="v6_memory_adaptation_probe"):
+                matching = [
+                    c for c in v6_cycles
+                    if c.get("student_code") == "PILOT-MATH-01"
+                    and c.get("skill") == "ترتيب خطوات الحل"
+                ]
+                if not matching:
+                    st.error("فشل استرجاع الذاكرة: لا توجد دورة محفوظة للطالب والمهارة في المدرسة الحالية.")
+                else:
+                    prior = matching[0]
+                    previous = str(prior.get("proposed_strategy") or "").strip()
+                    before = float(prior.get("baseline_pct") or 0)
+                    after = float(prior.get("followup_pct") or 0)
+                    threshold = float(prior.get("threshold_pct") or 80)
+                    stored_delta = float(prior.get("delta_pct_points") or 0)
+                    correct_math = abs((after-before)-stored_delta) < 0.01
+                    # Hypothetical SECOND attempt: same mastery -> no improvement.
+                    hypothetical_after = after
+                    if hypothetical_after >= threshold:
+                        next_action = "نشاط إثرائي وتقييم احتفاظ لاحق"
+                    elif hypothetical_after > before:
+                        next_action = "تدريب متدرج على الأخطاء المتبقية ثم إعادة تقييم"
+                    else:
+                        next_action = ("بدل إعادة النموذج المحلول وبطاقات الخطوات، "
+                                       "استخدم تحليل خطأ متعمد ومناقشة سبب ترتيب كل خطوة، "
+                                       "ثم اختبارًا جديدًا بإشراف المعلم.")
+                    differs = bool(previous) and next_action != previous
+                    checks = [
+                        ("استرجاع دورة محفوظة", True),
+                        ("سلامة حساب التغير", correct_math),
+                        ("استرجاع الاستراتيجية السابقة", bool(previous)),
+                        ("اقتراح بديل في المحاكاة", differs),
+                        ("عدم تغيير قاعدة البيانات", True),
+                    ]
+                    for label, ok in checks:
+                        (st.success if ok else st.error)(("✅ " if ok else "❌ ") + label)
+                    st.write("**الاستراتيجية السابقة:**", previous or "غير محفوظة")
+                    st.write("**سيناريو افتراضي:**", f"{before:.0f}% ← {hypothetical_after:.0f}%، المستهدف {threshold:.0f}%")
+                    st.write("**الاقتراح البديل في المحاكاة:**", next_action)
+                    st.info("هذا اختبار منطق محلي فقط. لإثبات التكيف الفعلي يجب حفظ دورة جديدة موثقة بعد تدخل مستقل، ثم التأكد من أن منطق القرار يستخدم الذاكرة السابقة.")
+
         if not completed:
             st.info("لا توجد دورة V5.5 مكتملة الربط في المدرسة المختارة. اربط تقييمًا بعديًا أولًا.")
         else:
