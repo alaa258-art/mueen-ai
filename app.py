@@ -1618,6 +1618,11 @@ with mueen_page(6):
                     "MUEEN_V6_1_Integrated_Audit.csv", "text/csv",
                     key="v61_integrated_audit_csv")
                 st.warning("تنبيه جودة: في اختبار المقترح 02baedb4، حل 2y-4=10 يتطلب جمع 4، وليس طرحها. راجع مفتاح الإجابة وتوزيع الدرجات قبل أي تقييم بعدي.")
+        # Field pilot intake: in-memory validation only, no Supabase writes.
+        with st.expander("📋 التجربة الميدانية — استقبال نتائج الطلبة (معاينة فقط)", expanded=False):
+            from mueen_field_intake import render as render_field_intake
+            render_field_intake()
+
         # V6.1 first milestone: real-record evidence preview; no DB writes.
         with st.expander("🔬 V6.1 — فحص التكيف بين دورتين فعليتين (قراءة فقط)", expanded=False):
             st.caption("يتطلب دورتين مختلفتين لنفس رمز الطالب والمهارة، واعتماد الدورة الأولى، وربط تقييمين مستقلين بالدورة الثانية. لا يحفظ قرارًا أو ينفذ تدخلًا.")
