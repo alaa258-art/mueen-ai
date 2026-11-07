@@ -1338,6 +1338,12 @@ else:
                     st.rerun()
     st.caption("القسم الحالي: " + nav_items[active_page][0])
 
+# V6.2 school pilot: subject-neutral, read-only teacher workflow.
+from mueen_school_pilot import render_school_pilot
+if st.session_state.get("mueen_active_page") == 5:
+    with st.expander("🏫 تجربة المعلم لأي مادة — تحليل وتدخل تكيفي (قراءة فقط)", expanded=True):
+        render_school_pilot()
+
 with mueen_page(0):
     st.info("مرحبًا بك في مُعين. اختر إحدى البطاقات الملونة أعلاه لفتح القسم المطلوب.")
 
