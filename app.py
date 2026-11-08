@@ -1338,6 +1338,12 @@ else:
                     st.rerun()
     st.caption("القسم الحالي: " + nav_items[active_page][0])
 
+# School agent: persistent, authenticated and human-reviewed.
+from mueen_school_agent import render_school_agent
+if st.session_state.get("mueen_active_page") == 5:
+    with st.expander("🏫 مُعين للمدارس — حفظ وذاكرة واعتماد المعلم", expanded=True):
+        render_school_agent(get_supabase, get_selected_school_id, get_current_user_id)
+
 # V6.2 school pilot: subject-neutral, read-only teacher workflow.
 from mueen_school_pilot import render_school_pilot
 if st.session_state.get("mueen_active_page") == 5:
