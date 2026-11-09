@@ -3198,6 +3198,143 @@ if db_client and st.session_state.get("mueen_active_page") in (1, 2, 3, 4):
                     "اعتمادًا على البيانات المعروضة والفلاتر الحالية."
                 )
 
+                # تقرير الدورات المدرسية المعتمدة: مصدر مستقل عن filtered_df.
+                # القراءة تتم بجلسة المستخدم، مع تحديد المدرسة وتطبيق RLS.
+                st.markdown("### 📚 دورات مُعين المعتمدة — بيانات محفوظة")
+                try:
+                    cycles_client = get_supabase()
+                    if cycles_client is None:
+                        raise ValueError("جلسة المستخدم غير متاحة")
+                    school_cycles = (
+                        cycles_client.table("mueen_school_cycles")
+                        .select("id,school_id,status,created_at,approved_at,report")
+                        .eq("school_id", get_selected_school_id())
+                        .eq("status", "approved")
+                        .order("created_at", desc=True)
+                        .limit(200)
+                        .execute()
+                    ).data or []
+                    if not school_cycles:
+                        st.info("لا توجد دورات مدرسية معتمدة لهذه المدرسة ضمن السجلات المعروضة.")
+                    else:
+                        # لا نجمع الدورات التي أعادت استخدام ملخص التقييم نفسه.
+                        # نعرض أحدث سجل لكل مادة/صف/ملخص مهارات متماثل.
+                        distinct_cycles = []
+                        seen_evidence = set()
+                        for cycle_row in school_cycles:
+                            cycle_report = cycle_row.get("report") or {}
+                            if not isinstance(cycle_report, dict):
+                                continue
+                            subject_name = str(cycle_report.get("subject") or "غير محدد")
+                            grade_name = str(cycle_report.get("grade") or "غير محدد")
+                            summary = cycle_report.get("skill_summary") or []
+                            if not isinstance(summary, list) or not summary:
+                                continue
+                            signature = (
+                                subject_name, grade_name,
+                                json.dumps(summary, sort_keys=True, ensure_ascii=False),
+                            )
+                            if signature in seen_evidence:
+                                continue
+                            seen_evidence.add(signature)
+                            distinct_cycles.append((cycle_row, cycle_report, summary))
+
+                        st.caption(
+                            f"الدورات المعتمدة: {len(school_cycles)}؛ "
+                            f"مجموعات نتائج مميزة: {len(distinct_cycles)}. "
+                            "التطابق هنا يعتمد على ملخص المهارات؛ ولا يثبت استقلال عينات الطلبة."
+                        )
+                        cycle_summary_rows = []
+                        cycle_skill_rows = []
+                        for cycle_row, cycle_report, summary in distinct_cycles:
+                            skill_rows = []
+                            for item in summary:
+                                if not isinstance(item, dict):
+                                    continue
+                                try:
+                                    before = float(item["القبلي %"])
+                                    after = float(item["البعدي %"])
+                                except (KeyError, ValueError, TypeError):
+                                    continue
+                                if not (0 <= before <= 100 and 0 <= after <= 100):
+                                    continue
+                                skill_rows.append((str(item.get("المهارة") or "غير محددة"), before, after))
+                            if not skill_rows:
+                                continue
+                            # متوسط غير مرجح عبر المهارات؛ لا ندعي أنه متوسط درجات الطلاب.
+                            avg_before = sum(x[1] for x in skill_rows) / len(skill_rows)
+                            avg_after = sum(x[2] for x in skill_rows) / len(skill_rows)
+                            cycle_summary_rows.append({
+                                "المادة": str(cycle_report.get("subject") or "غير محددة"),
+                                "الصف": str(cycle_report.get("grade") or "غير محدد"),
+                                "الطلاب (وفق التقرير)": cycle_report.get("students_count", "—"),
+                                "المهارات": len(skill_rows),
+                                "القبلي %": round(avg_before, 2),
+                                "البعدي %": round(avg_after, 2),
+                                "التغير (نقطة)": round(avg_after - avg_before, 2),
+                                "تاريخ الاعتماد": str(cycle_row.get("approved_at") or "—")[:10],
+                                "معرف الدورة": str(cycle_row.get("id") or ""),
+                            })
+                            for name, before, after in skill_rows:
+                                cycle_skill_rows.append({
+                                    "المادة": str(cycle_report.get("subject") or "غير محددة"),
+                                    "الصف": str(cycle_report.get("grade") or "غير محدد"),
+                                    "المهارة": name,
+                                    "القبلي %": round(before, 2),
+                                    "البعدي %": round(after, 2),
+                                    "التغير (نقطة)": round(after - before, 2),
+                                })
+                        if cycle_summary_rows:
+                            st.dataframe(pd.DataFrame(cycle_summary_rows), use_container_width=True, hide_index=True)
+                            st.markdown("#### تفاصيل المهارات")
+                            st.dataframe(pd.DataFrame(cycle_skill_rows), use_container_width=True, hide_index=True)
+                            st.caption(
+                                "المتوسطات في هذا القسم هي متوسطات حسابية متساوية الوزن للمهارات "
+                                "كما حُفظت في التقرير المعتمد. ليست متوسطًا مرجحًا بالدرجات، "
+                                "ولا تثبت السببية. نتائج الاختبار البعدي الثاني المحللة محليًا "
+                                "لا تُضاف هنا قبل حفظها رسميًا."
+                            )
+                            # تصدير مستقل كي لا تختلط هذه البيانات بالتقرير القديم.
+                            safe_school = html.escape(str(selected_school.get("name") or "المدرسة"))
+                            def _html_table(rows):
+                                columns = list(rows[0].keys())
+                                heads = "".join(f"<th>{html.escape(str(c))}</th>" for c in columns)
+                                body = "".join(
+                                    "<tr>" + "".join(
+                                        f"<td>{html.escape(str(row.get(c, '')))}</td>" for c in columns
+                                    ) + "</tr>" for row in rows
+                                )
+                                return f"<table><thead><tr>{heads}</tr></thead><tbody>{body}</tbody></table>"
+                            school_report_html = (
+                                '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">'
+                                '<title>تقرير دورات مُعين المعتمدة</title>'
+                                '<style>body{font-family:Tahoma,Arial,sans-serif;margin:28px;color:#10243A}'
+                                'table{border-collapse:collapse;width:100%;margin:15px 0}'
+                                'th,td{border:1px solid #cbd5e1;padding:8px;text-align:right}'
+                                'th{background:#e6f3f4}@media print{body{margin:12mm}}</style></head><body>'
+                                f'<h1>تقرير دورات مُعين المعتمدة — {safe_school}</h1>'
+                                '<p>المصدر: mueen_school_cycles، الدورات المعتمدة للمدرسة النشطة فقط.</p>'
+                                + _html_table(cycle_summary_rows)
+                                + '<h2>تفاصيل المهارات</h2>' + _html_table(cycle_skill_rows)
+                                + '<p>متوسطات المهارات غير مرجحة بالدرجات؛ الدورات ذات ملخص المهارات المتطابق عُرضت مرة واحدة. '
+                                'نتائج التقييم الثاني غير المحفوظة لا يشملها هذا التقرير.</p>'
+                                '</body></html>'
+                            )
+                            st.download_button(
+                                "📄 تنزيل تقرير الدورات المعتمدة HTML",
+                                data=school_report_html.encode("utf-8"),
+                                file_name="mueen_approved_cycles_report.html",
+                                mime="text/html",
+                                key="download_mueen_approved_cycles_report",
+                            )
+                        else:
+                            st.info("لا توجد ملخصات مهارات صالحة في الدورات المعتمدة.")
+                except Exception as cycles_exc:
+                    st.error("تعذر تحميل الدورات المعتمدة. تحقق من صلاحية SELECT وسياسات RLS للجدول.")
+                    st.caption(f"نوع الخطأ: {type(cycles_exc).__name__}")
+
+                st.divider()
+                st.markdown("### التقرير التنفيذي العام — سجلات التقييمات")
                 if filtered_df.empty:
                     st.info("لا توجد بيانات كافية لإنشاء التقرير التنفيذي.")
                 else:
