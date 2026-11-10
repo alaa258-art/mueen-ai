@@ -1338,6 +1338,18 @@ else:
                     st.rerun()
     st.caption("القسم الحالي: " + nav_items[active_page][0])
 
+# School agent: persistent, authenticated and human-reviewed.
+from mueen_school_agent import render_school_agent
+if st.session_state.get("mueen_active_page") == 5:
+    with st.expander("🏫 مُعين للمدارس — حفظ وذاكرة واعتماد المعلم", expanded=True):
+        render_school_agent(get_supabase, get_selected_school_id, get_current_user_id)
+
+# V6.2 school pilot: subject-neutral, read-only teacher workflow.
+from mueen_school_pilot import render_school_pilot
+if st.session_state.get("mueen_active_page") == 5:
+    with st.expander("🏫 تجربة المعلم لأي مادة — تحليل وتدخل تكيفي (قراءة فقط)", expanded=True):
+        render_school_pilot()
+
 with mueen_page(0):
     st.info("مرحبًا بك في مُعين. اختر إحدى البطاقات الملونة أعلاه لفتح القسم المطلوب.")
 
@@ -1507,6 +1519,50 @@ with mueen_page(6):
                     "MUEEN_V5_5_Workflow_Report.csv","text/csv",key="v55_download")
             else:st.info("لا توجد مقترحات بعد.")
 
+    # V6.1: evidence-based second-cycle candidate (read-only until schema and RLS review).
+    def v61_candidate(previous, current, baseline, followup):
+        """Compute a second-cycle recommendation using actual linked assessments."""
+        if str(previous.get("source_draft_id")) == str(current.get("id")):
+            raise ValueError("لا يجوز إعادة استخدام مصدر الدورة السابقة.")
+        if previous.get("review_status") != "approved":
+            raise ValueError("يجب اعتماد الدورة السابقة بشريًا أولًا.")
+        if (str(previous.get("student_code")) != str(current.get("student_code"))
+                or str(previous.get("skill")) != str(current.get("skill"))):
+            raise ValueError("يجب تطابق رمز الطالب والمهارة بين الدورتين.")
+        if any(str(r.get("student_code")) != str(current.get("student_code"))
+               or str(r.get("skill")) != str(current.get("skill")) for r in (baseline, followup)):
+            raise ValueError("سجلات التقييم لا تطابق الطالب والمهارة.")
+        if baseline.get("assessment_type") != "baseline" or followup.get("assessment_type") != "follow_up":
+            raise ValueError("يجب وجود تقييم قبلي وتقييم بعدي مستقلين.")
+        if str(baseline.get("id")) == str(followup.get("id")):
+            raise ValueError("لا يجوز استخدام التقييم نفسه مرتين.")
+        for r in (baseline, followup):
+            score, maximum = float(r["score"]), float(r["max_score"])
+            if maximum <= 0 or not 0 <= score <= maximum:
+                raise ValueError("درجات التقييم غير صالحة.")
+        before = 100 * float(baseline["score"]) / float(baseline["max_score"])
+        after = 100 * float(followup["score"]) / float(followup["max_score"])
+        target = float(current.get("threshold_pct") or previous.get("threshold_pct") or 80)
+        delta = after - before
+        if after >= target:
+            strategy = "نشاط إثرائي وتقييم احتفاظ لاحق، بعد تحقق المعلم من صلاحية أداة القياس."
+            outcome = "mastered"
+        elif delta > 0:
+            strategy = "تدريب موجه على الأخطاء المتبقية، ثم تقييم متابعة مستقل بإشراف المعلم."
+            outcome = "partial"
+        else:
+            strategy = "تحليل أخطاء خطوات الحل بمثال خاطئ مقصود، ثم نقاش تبرير ترتيب الخطوات وتقييم مستقل."
+            outcome = "stagnant"
+        old_strategy = str(previous.get("proposed_strategy") or "").strip()
+        if strategy == old_strategy:
+            raise ValueError("الاستراتيجية الجديدة مطابقة حرفيًا للسابقة؛ يلزم مراجعة بشرية.")
+        return {"baseline_pct": round(before, 2), "followup_pct": round(after, 2),
+                "delta_pct_points": round(delta, 2), "threshold_pct": target,
+                "outcome": outcome, "previous_cycle_id": str(previous["id"]),
+                "previous_strategy": old_strategy, "proposed_strategy": strategy,
+                "source_draft_id": str(current["id"]),
+                "explanation": "استُخدمت نتيجة الدورة الثانية الفعلية وقرار الدورة السابقة المعتمد؛ لا يمكن إثبات سبب التغير من الدرجات وحدها."}
+
     # V6.0: advisory adaptive agent. No automatic approvals or real-world actions.
     st.markdown("---")
     st.markdown("## 🧠 V6.0 — الوكيل التعليمي التكيفي (نسخة تجريبية)")
@@ -1524,6 +1580,109 @@ with mueen_page(6):
             .eq("school_id",v6_school).order("created_at",desc=True).limit(200).execute().data or [])
         completed = [d for d in v6_drafts if d.get("baseline_assessment_id") is not None and d.get("followup_assessment_id") is not None]
         st.metric("الدورات السابقة المحفوظة في ذاكرة الوكيل",len(v6_cycles))
+        # V6.1: one-click consolidated, read-only evidence and quality audit.
+        with st.expander("🧪 V6.1 — الفحص الشامل الموحد (قراءة فقط)", expanded=True):
+            st.caption("فحص الذاكرة، استقلال المقترحات، روابط التقييم، وملاحظات جودة الاختبار. لا يكتب إلى Supabase.")
+            if st.button("▶ تشغيل الفحص الشامل مرة واحدة", key="v61_integrated_audit"):
+                audit = []
+                def check(name, ok, detail):
+                    audit.append({"الفحص": name, "الحالة": "نجاح" if ok else "يحتاج إجراء", "التفاصيل": detail})
+                first = next((c for c in v6_cycles if
+                    str(c.get("student_code")) == "PILOT-MATH-01"
+                    and str(c.get("skill")) == "ترتيب خطوات الحل"
+                    and c.get("review_status") == "approved"), None)
+                check("ذاكرة الدورة الأولى", first is not None,
+                      "دورة أولى معتمدة موجودة" if first else "لم توجد دورة أولى معتمدة")
+                related = [d for d in v6_drafts if
+                    str(d.get("student_code")) == "PILOT-MATH-01"
+                    and str(d.get("skill")) == "ترتيب خطوات الحل"]
+                check("وجود المقترحات", bool(related), f"عدد المقترحات المعتمدة: {len(related)}")
+                second = [d for d in related if first and
+                    str(d.get("id")) != str(first.get("source_draft_id"))]
+                complete = [d for d in second if
+                    d.get("baseline_assessment_id") is not None and
+                    d.get("followup_assessment_id") is not None and
+                    str(d.get("baseline_assessment_id")) != str(d.get("followup_assessment_id"))]
+                check("اكتمال مقترح ثانٍ مستقل", bool(complete),
+                      f"مقترحات مستقلة: {len(second)}؛ مكتملة مبدئيًا: {len(complete)}")
+                base_usage = {}
+                for d in second:
+                    base_id = d.get("baseline_assessment_id")
+                    if base_id is not None:
+                        base_usage.setdefault(str(base_id), []).append(str(d.get("id"))[:8])
+                duplicates = {k: v for k, v in base_usage.items() if len(v) > 1}
+                check("عدم مشاركة تقييم قبلي بين مقترحين", not duplicates,
+                      "لا يوجد تكرار" if not duplicates else f"تقييمات مشتركة: {duplicates}")
+                check("تمييز البيانات التجريبية",
+                      bool(related) and all(d.get("is_demo") is True for d in related),
+                      "كل المقترحات المعنية موسومة تجريبية" if related else "لا توجد مقترحات")
+                check("مراجعة جودة الاختبار", False,
+                      "يلزم اعتماد بشري لصحة المسائل ومفتاح الإجابة وسلم الدرجات؛ لا يكفي توليد الذكاء الاصطناعي.")
+                check("إثبات تنفيذ التدخل الثاني", False,
+                      "لا يمكن إثبات تنفيذ النشاط من سجلات المقترحات والتقييمات وحدها.")
+                check("إثبات تكيف الوكيل من الذاكرة", False,
+                      "يلزم سجل قرار يبين كيف أثرت ذاكرة الدورة الأولى في اختيار التدخل الثاني.")
+                st.dataframe(pd.DataFrame(audit), use_container_width=True, hide_index=True)
+                passed = sum(r["الحالة"] == "نجاح" for r in audit)
+                st.info(f"نتيجة الفحص: {passed} من {len(audit)} ناجحة. الفحوص غير المثبتة ليست نجاحًا.")
+                st.download_button("📥 تنزيل تقرير V6.1 CSV",
+                    pd.DataFrame(audit).to_csv(index=False).encode("utf-8-sig"),
+                    "MUEEN_V6_1_Integrated_Audit.csv", "text/csv",
+                    key="v61_integrated_audit_csv")
+                st.warning("تنبيه جودة: في اختبار المقترح 02baedb4، حل 2y-4=10 يتطلب جمع 4، وليس طرحها. راجع مفتاح الإجابة وتوزيع الدرجات قبل أي تقييم بعدي.")
+        # Field pilot intake: in-memory validation only, no Supabase writes.
+        with st.expander("📋 التجربة الميدانية — استقبال نتائج الطلبة (معاينة فقط)", expanded=False):
+            from mueen_field_intake import render as render_field_intake
+            render_field_intake()
+
+        # V6.1 first milestone: real-record evidence preview; no DB writes.
+        with st.expander("🔬 V6.1 — فحص التكيف بين دورتين فعليتين (قراءة فقط)", expanded=False):
+            st.caption("يتطلب دورتين مختلفتين لنفس رمز الطالب والمهارة، واعتماد الدورة الأولى، وربط تقييمين مستقلين بالدورة الثانية. لا يحفظ قرارًا أو ينفذ تدخلًا.")
+            candidates = []
+            for draft in completed:
+                previous_cycles = [c for c in v6_cycles
+                    if str(c.get("source_draft_id")) != str(draft.get("id"))
+                    and str(c.get("student_code")) == str(draft.get("student_code"))
+                    and str(c.get("skill")) == str(draft.get("skill"))
+                    and c.get("review_status") == "approved"
+                    and str(c.get("school_id")) == v6_school]
+                if previous_cycles:
+                    candidates.append((draft, previous_cycles[0]))
+            if not candidates:
+                st.info("لا توجد بعد دورة ثانية مستقلة مرتبطة بدورة أولى معتمدة. لن نختلق بيانات أو نكرر تحليل الدورة الأولى.")
+            else:
+                options = list(range(len(candidates)))
+                choice = st.selectbox("الدورة الثانية المرشحة", options,
+                    format_func=lambda i: f'{candidates[i][0].get("student_code")} | {candidates[i][0].get("skill")} | {str(candidates[i][0].get("id"))[:8]}',
+                    key="v61_candidate_select")
+                draft, previous = candidates[choice]
+                if st.button("🔎 فحص أدلة الدورة الثانية", key="v61_preview"):
+                    try:
+                        ids = [draft["baseline_assessment_id"], draft["followup_assessment_id"]]
+                        records = (v6_client.table("assessment_records")
+                            .select("id,school_id,student_code,skill,assessment_type,score,max_score,created_at")
+                            .eq("school_id", v6_school).in_("id", ids).execute().data or [])
+                        record_map = {str(r["id"]): r for r in records}
+                        if len(record_map) != 2 or any(str(i) not in record_map for i in ids):
+                            raise ValueError("تعذر استرجاع التقييمين المستقلين.")
+                        baseline, followup = (record_map[str(i)] for i in ids)
+                        if baseline.get("created_at") and followup.get("created_at") and baseline["created_at"] >= followup["created_at"]:
+                            raise ValueError("تاريخ التقييم البعدي يجب أن يكون بعد القبلي.")
+                        # Avoid reusing assessment IDs across the two attempts.
+                        previous_ids = {str(previous.get("baseline_assessment_id")), str(previous.get("followup_assessment_id"))}
+                        if any(str(i) in previous_ids for i in ids):
+                            raise ValueError("لا يجوز إعادة استخدام تقييم من الدورة السابقة.")
+                        result = v61_candidate(previous, draft, baseline, followup)
+                        st.success("تم تحليل سجلات دورة ثانية مستقلة، دون كتابة أي بيانات.")
+                        st.write("**الدورة السابقة المعتمدة:**", result["previous_cycle_id"])
+                        st.write("**الاستراتيجية السابقة:**", result["previous_strategy"] or "غير مسجلة")
+                        st.write("**نتائج الدورة الثانية:**", f'{result["baseline_pct"]}% → {result["followup_pct"]}% ({result["delta_pct_points"]:+.2f} نقطة)')
+                        st.write("**الاقتراح الجديد:**", result["proposed_strategy"])
+                        st.info(result["explanation"])
+                        st.warning("هذا فحص قراءة فقط؛ ليس اعتمادًا أو حفظًا لدورة V6.1. إثبات تنفيذ تدخل ثانٍ يحتاج دليلًا مستقلًا ومراجعة بشرية.")
+                    except Exception as exc:
+                        st.error("فشل فحص أدلة الدورة الثانية: " + str(exc)[:350])
+
         # V6.0: one-click, read-only memory/adaptation simulation.
         # This does not create a second real intervention cycle.
         with st.expander("🧪 اختبار الذاكرة والتكيف مرة واحدة (محاكاة آمنة)", expanded=False):
@@ -3032,463 +3191,11 @@ if db_client and st.session_state.get("mueen_active_page") in (1, 2, 3, 4):
                     )
 
             with mueen_page(4):
-                # التقرير التنفيذي الذكي لمدير المدرسة
-                st.markdown("## 🏫 التقرير التنفيذي الذكي لمدير المدرسة")
-                st.caption(
-                    "تقرير موجز لدعم القرارات التعليمية، "
-                    "اعتمادًا على البيانات المعروضة والفلاتر الحالية."
+                from mueen_executive_report import render_executive_report
+                render_executive_report(
+                    get_supabase, get_selected_school_id, get_current_user_id,
+                    str(selected_school.get("name") or "المدرسة")
                 )
-
-                if filtered_df.empty:
-                    st.info("لا توجد بيانات كافية لإنشاء التقرير التنفيذي.")
-                else:
-                    report_df = filtered_df.copy()
-                    report_df["mastery_pct"] = pd.to_numeric(
-                        report_df["mastery_pct"], errors="coerce"
-                    )
-                    report_df = report_df.dropna(
-                        subset=["skill", "mastery_pct"]
-                    )
-
-                    if report_df.empty:
-                        st.info("لا توجد نتائج إتقان صالحة لإنشاء التقرير.")
-                    else:
-                        report_avg = float(report_df["mastery_pct"].mean())
-                        report_skills = (
-                            report_df.groupby("skill", as_index=False)
-                            .agg(
-                                متوسط_الإتقان=("mastery_pct", "mean"),
-                                عدد_السجلات=("mastery_pct", "count"),
-                            )
-                        )
-                        report_skills["متوسط_الإتقان"] = (
-                            report_skills["متوسط_الإتقان"].round(1)
-                        )
-                        report_weak = report_skills[
-                            report_skills["متوسط_الإتقان"] < threshold
-                        ].sort_values("متوسط_الإتقان")
-
-                        report_baseline = report_df[
-                            report_df["assessment_type"].astype(str).str.lower()
-                            .isin(["baseline", "قبلي"])
-                        ]
-                        report_followup = report_df[
-                            report_df["assessment_type"].astype(str).str.lower()
-                            .isin(["follow_up", "followup", "بعدي"])
-                        ]
-
-                        baseline_mean = (
-                            float(report_baseline["mastery_pct"].mean())
-                            if not report_baseline.empty else None
-                        )
-                        followup_mean = (
-                            float(report_followup["mastery_pct"].mean())
-                            if not report_followup.empty else None
-                        )
-
-                        r1, r2, r3 = st.columns(3)
-                        r1.metric("متوسط الإتقان", f"{report_avg:.1f}%")
-                        r2.metric("حد الإتقان المستهدف", f"{threshold}%")
-                        r3.metric("مهارات دون الحد", len(report_weak))
-
-                        st.markdown("### الملخص التنفيذي")
-                        if report_avg >= threshold:
-                            st.success(
-                                "متوسط الإتقان العام بلغ حد الإتقان المستهدف "
-                                "أو تجاوزه. يُنصح بالمحافظة على المستوى "
-                                "ومعالجة أي مهارات منخفضة بصورة فردية."
-                            )
-                        else:
-                            st.warning(
-                                f"متوسط الإتقان العام {report_avg:.1f}%، "
-                                f"وهو أقل من الهدف المحدد ({threshold}%). "
-                                "تُوصى الأولوية بمراجعة المهارات الأقل إتقانًا "
-                                "وتنفيذ تدخلات تعليمية موجهة."
-                            )
-
-                        st.markdown("### أبرز نقاط القوة")
-                        strengths = report_skills[
-                            report_skills["متوسط_الإتقان"] >= threshold
-                        ].sort_values("متوسط_الإتقان", ascending=False)
-
-                        if strengths.empty:
-                            st.write(
-                                "لم تبلغ أي مهارة حد الإتقان المستهدف "
-                                "ضمن البيانات الحالية."
-                            )
-                        else:
-                            for _, row in strengths.iterrows():
-                                st.write(
-                                    f"• {row['skill']}: "
-                                    f"{row['متوسط_الإتقان']:.1f}%"
-                                )
-
-                        st.markdown("### أولويات الدعم")
-                        if report_weak.empty:
-                            st.write(
-                                "لا توجد مهارات دون حد الإتقان "
-                                "وفق البيانات والفلاتر الحالية."
-                            )
-                        else:
-                            st.dataframe(
-                                report_weak.rename(columns={
-                                    "skill": "المهارة",
-                                    "متوسط_الإتقان": "متوسط الإتقان (%)",
-                                    "عدد_السجلات": "عدد السجلات",
-                                }),
-                                use_container_width=True,
-                                hide_index=True,
-                            )
-                            st.write(
-                                "التوصية: إعداد أنشطة علاجية للمهارات "
-                                "الأقل إتقانًا، ثم إجراء تقييم متابعة "
-                                "لقياس التقدم."
-                            )
-
-                        st.markdown("### مؤشرات التقييم القبلي والبعدي")
-                        q1, q2 = st.columns(2)
-                        q1.metric(
-                            "متوسط التقييم القبلي",
-                            f"{baseline_mean:.1f}%"
-                            if baseline_mean is not None else "لا توجد بيانات"
-                        )
-                        q2.metric(
-                            "متوسط التقييم البعدي",
-                            f"{followup_mean:.1f}%"
-                            if followup_mean is not None else "لا توجد بيانات"
-                        )
-
-                        if baseline_mean is not None and followup_mean is not None:
-                            st.caption(
-                                "تنبيه: الفرق بين المتوسطين العامين لا يثبت "
-                                "تحسن الطلاب أنفسهم ما لم تُطابق سجلات الطالب "
-                                "والمهارة بين التقييمين."
-                            )
-
-                        
-                        # إنشاء تقرير HTML احترافي قابل للطباعة والحفظ PDF
-                        from datetime import datetime
-                        from zoneinfo import ZoneInfo
-
-                        report_date = datetime.now(
-                            ZoneInfo("Asia/Dubai")
-                        ).strftime("%Y-%m-%d %H:%M")
-
-                        active_school_name = html.escape(
-                            str(selected_school.get("name", "المدرسة"))
-                        )
-                        # V6.5 - تحديد السنة الدراسية الحالية
-                        report_now = datetime.now(ZoneInfo("Asia/Dubai"))
-
-                        if report_now.month >= 8:
-                            academic_start_year = report_now.year
-                        else:
-                            academic_start_year = report_now.year - 1
-
-                        report_academic_year = (
-                            f"{academic_start_year}-{academic_start_year + 1}"
-                        )
-                        safe_skills = []
-                        for _, row in report_skills.sort_values(
-                            "متوسط_الإتقان"
-                        ).iterrows():
-                            skill_name = html.escape(str(row["skill"]))
-                            mastery_value = float(row["متوسط_الإتقان"])
-                            record_count = int(row["عدد_السجلات"])
-
-                            safe_skills.append(
-                                "<tr><td>" + skill_name + "</td>"
-                                + f"<td>{mastery_value:.1f}%</td>"
-                                + f"<td>{record_count}</td></tr>"
-                            )
-
-                        if report_avg >= threshold:
-                            executive_summary = (
-                                "بلغ متوسط الإتقان العام الهدف المحدد أو تجاوزه. "
-                                "يوصى بالمحافظة على نقاط القوة ومعالجة المهارات "
-                                "التي ما زالت دون المستوى المستهدف."
-                            )
-                        else:
-                            executive_summary = (
-                                f"بلغ متوسط الإتقان {report_avg:.1f}%، "
-                                f"وهو أقل من الهدف المحدد البالغ {threshold}%. "
-                                "تُعطى الأولوية للمهارات الأقل إتقانًا، "
-                                "مع تنفيذ أنشطة علاجية وتقييم لاحق."
-                            )
-
-                        safe_summary = html.escape(executive_summary)
-
-                        if baseline_mean is not None:
-                            baseline_text = f"{baseline_mean:.1f}%"
-                        else:
-                            baseline_text = "لا توجد بيانات"
-
-                        if followup_mean is not None:
-                            followup_text = f"{followup_mean:.1f}%"
-                        else:
-                            followup_text = "لا توجد بيانات"
-
-                        report_html = f"""<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>التقرير التنفيذي الذكي - MUEEN AI</title>
-<style>
-:root {{
-    --navy: #10243A;
-    --teal: #087E8B;
-    --gold: #D9A441;
-    --bg: #F3F6FA;
-    --text: #263445;
-    --muted: #64748B;
-}}
-* {{ box-sizing: border-box; }}
-body {{
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: Tahoma, Arial, sans-serif;
-    line-height: 1.85;
-}}
-.page {{
-    max-width: 1000px;
-    margin: 28px auto;
-    padding: 30px;
-    background: #fff;
-    border-radius: 16px;
-    box-shadow: 0 5px 24px rgba(16,36,58,.08);
-}}
-.hero {{
-    padding: 28px;
-    border-radius: 13px;
-    color: white;
-    background: linear-gradient(120deg, var(--navy), #17465B, var(--teal));
-    border-bottom: 5px solid var(--gold);
-}}
-.brand {{
-    color: #F1CB72;
-    font-size: 13px;
-    font-weight: bold;
-    letter-spacing: .5px;
-}}
-h1 {{ margin: 8px 0; font-size: 27px; }}
-.subtitle {{ color: #E4EDF4; margin: 4px 0; }}
-.meta {{
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-    margin: 18px 0;
-}}
-.meta div, .metric {{
-    padding: 14px;
-    border: 1px solid #E2E8F0;
-    border-radius: 10px;
-    background: #F8FAFC;
-}}
-.label {{ color: var(--muted); font-size: 13px; }}
-.value {{ color: var(--navy); font-weight: bold; }}
-.metrics {{
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-    margin: 18px 0;
-}}
-.metric {{ border-top: 4px solid var(--teal); }}
-.metric strong {{
-    display: block;
-    color: var(--navy);
-    font-size: 25px;
-}}
-h2 {{
-    color: var(--navy);
-    font-size: 19px;
-    border-right: 4px solid var(--gold);
-    padding-right: 10px;
-    margin-top: 28px;
-}}
-.summary {{
-    background: #EDF8F8;
-    border: 1px solid #B9E0E1;
-    border-radius: 10px;
-    padding: 16px;
-}}
-table {{
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 12px;
-}}
-th, td {{
-    border: 1px solid #DCE4EC;
-    padding: 10px;
-    text-align: right;
-}}
-th {{ background: var(--navy); color: white; }}
-tbody tr:nth-child(even) {{ background: #F3F6FA; }}
-.note {{
-    margin-top: 22px;
-    padding: 12px;
-    color: #526174;
-    background: #F8FAFC;
-    border-radius: 8px;
-    font-size: 12px;
-}}
-.actions {{
-    display: flex;
-    gap: 10px;
-    margin: 20px 0;
-}}
-button {{
-    border: 0;
-    border-radius: 8px;
-    padding: 11px 18px;
-    color: white;
-    background: var(--teal);
-    font-size: 15px;
-    cursor: pointer;
-}}
-button.secondary {{ background: var(--navy); }}
-.footer {{
-    margin-top: 24px;
-    padding-top: 12px;
-    border-top: 1px solid #DCE4EC;
-    color: var(--muted);
-    font-size: 12px;
-    text-align: center;
-}}
-@media (max-width: 600px) {{
-    .page {{ margin: 0; padding: 16px; border-radius: 0; }}
-    .metrics {{ grid-template-columns: 1fr; }}
-    .meta {{ grid-template-columns: 1fr; }}
-    h1 {{ font-size: 22px; }}
-}}
-@page {{ size: A4; margin: 12mm; }}
-@media print {{
-    body {{ background: white; font-size: 11pt; }}
-    .page {{
-        max-width: none;
-        margin: 0;
-        padding: 0;
-        box-shadow: none;
-        border-radius: 0;
-    }}
-    .actions {{ display: none !important; }}
-    .hero, th {{
-        print-color-adjust: exact;
-        -webkit-print-color-adjust: exact;
-    }}
-    h2, table, .metrics, .summary {{
-        break-inside: avoid;
-    }}
-}}
-</style>
-</head>
-<body>
-<main class="page">
-    <header class="hero">
-        <div class="brand">MUEEN AI | مُعين</div>
-        <h1>التقرير التنفيذي الذكي</h1>
-        <p class="subtitle">تقرير متابعة التحصيل الدراسي والإتقان</p>
-    </header>
-
-    <section class="meta">
-        <div>
-            <div class="label">المدرسة النشطة</div>
-            <div class="value">{active_school_name}</div>
-        </div>
-<div>
-    <div class="label">السنة الدراسية</div>
-    <div class="value">{report_academic_year}</div>
-</div>
-<div>
-    <div class="label">تاريخ إصدار التقرير</div>
-    <div class="value">{report_date}</div>
-</div>
-    </section>
-
-    <div class="actions">
-        <button onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
-        <button class="secondary" onclick="window.close()">إغلاق</button>
-    </div>
-
-    <h2>المؤشرات الرئيسية</h2>
-    <section class="metrics">
-        <div class="metric">
-            <div class="label">متوسط الإتقان العام</div>
-            <strong>{report_avg:.1f}%</strong>
-        </div>
-        <div class="metric">
-            <div class="label">حد الإتقان المستهدف</div>
-            <strong>{threshold}%</strong>
-        </div>
-        <div class="metric">
-            <div class="label">مهارات دون الحد</div>
-            <strong>{len(report_weak)}</strong>
-        </div>
-    </section>
-
-    <h2>الملخص التنفيذي</h2>
-    <div class="summary">{safe_summary}</div>
-
-    <h2>نتائج المهارات</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>المهارة</th>
-                <th>متوسط الإتقان</th>
-                <th>عدد السجلات</th>
-            </tr>
-        </thead>
-        <tbody>
-            {"".join(safe_skills)}
-        </tbody>
-    </table>
-
-    <h2>مؤشرات التقييم القبلي والبعدي</h2>
-    <section class="metrics">
-        <div class="metric">
-            <div class="label">متوسط التقييم القبلي</div>
-            <strong>{baseline_text}</strong>
-        </div>
-        <div class="metric">
-            <div class="label">متوسط التقييم البعدي</div>
-            <strong>{followup_text}</strong>
-        </div>
-    </section>
-
-    <h2>التوصية التنفيذية</h2>
-    <p>
-        توجيه الدعم التعليمي إلى المهارات الأقل إتقانًا، وتنفيذ أنشطة علاجية
-        مناسبة، ثم إجراء تقييم لاحق لقياس التقدم. تُراجع النتائج من قبل
-        المعلم والإدارة قبل اتخاذ القرارات.
-    </p>
-
-    <div class="note">
-        يعتمد هذا التقرير على البيانات والفلاتر الحالية. وقد يختلف عدد
-        السجلات بين التقييم القبلي والبعدي؛ لذلك لا يثبت اختلاف المتوسطين
-        وحده تحسن الطلاب أنفسهم أو العلاقة السببية بين التدخل والنتيجة.
-        يجب مراجعة النتائج قبل اتخاذ قرارات تعليمية.
-    </div>
-
-    <footer class="footer">
-        MUEEN AI | مُعين — أداة مساندة للقرار التعليمي
-    </footer>
-</main>
-</body>
-</html>"""
-
-
-                        st.download_button(
-                            "📄 تنزيل التقرير التنفيذي HTML",
-                            data=report_html.encode("utf-8"),
-                            file_name="mueen_executive_report.html",
-                            mime="text/html",
-                            key="download_mueen_executive_report",
-                        )
-                        st.caption(
-                            "يمكن فتح ملف HTML في المتصفح ثم اختيار طباعة "
-                            "وحفظ بصيغة PDF."
-                        )
 
             with mueen_page(1):
                 st.markdown("### 🗂️ أحدث السجلات المحفوظة")
