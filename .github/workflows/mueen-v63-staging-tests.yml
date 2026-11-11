@@ -52,3 +52,5 @@ jobs:
 
       - name: Run security tests
         run: python -m unittest discover -s tests -p "test_teacher_admin.py" -v
+        MUEEN_FAKE_TEACHER_USER_ID: ${{ secrets.MUEEN_FAKE_TEACHER_USER_ID }}
+        MUEEN_ALLOW_MUTATIONS: YES_STAGING_ONLY
