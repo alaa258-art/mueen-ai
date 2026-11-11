@@ -73,7 +73,38 @@ class MueenSecurityTests(unittest.TestCase):
                                 'user_id': 'not-a-uuid', 'is_active': False}, PRINCIPAL)
         self.assertEqual(status, 400, data)
 
-    def test_11_deactivate_and_reactivate_fake_teacher(self):
+    def @unittest.skipUnless(
+    ALLOW_MUTATIONS and PRINCIPAL and FAKE_TARGET,
+    'Requires explicit mutation opt-in and fake target'
+)
+def test_11_deactivate_and_reactivate_fake_teacher(self):
+    self.assertNotEqual(FAKE_TARGET, SCHOOL)
+    self.assertNotEqual(FAKE_TARGET, OTHER)
+
+    try:
+        status, data = request({
+            'action': 'set_active',
+            'school_id': SCHOOL,
+            'user_id': FAKE_TARGET,
+            'is_active': False
+        }, PRINCIPAL)
+
+        self.assertEqual(status, 200, data)
+        self.assertEqual(data.get('ok'), True)
+
+    finally:
+        status, data = request({
+            'action': 'set_active',
+            'school_id': SCHOOL,
+            'user_id': FAKE_TARGET,
+            'is_active': True
+        }, PRINCIPAL)
+
+        self.assertEqual(
+            status, 200,
+            f'CRITICAL: Reactivation failed: {data}'
+        )
+        self.assertEqual(data.get('ok'), True)(self):
         # A missing opt-in is a failure, not a silent skip in the full suite.
         require(ALLOW_MUTATIONS, 'Set MUEEN_ALLOW_MUTATIONS=YES_STAGING_ONLY explicitly')
         require(UUID.fullmatch(FAKE_TARGET or '') and FAKE_TARGET == FAKE_ALLOWLIST,
