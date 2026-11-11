@@ -1,0 +1,54 @@
+
+name: MUEEN V6.3 Staging Security Tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mueen-v63-staging-tests
+  cancel-in-progress: false
+
+jobs:
+  security-tests:
+    name: Teacher Admin Security Tests
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 10
+
+    env:
+      MUEEN_PROJECT_LABEL: staging
+      MUEEN_STAGING_URL: ${{ vars.MUEEN_STAGING_URL }}
+      MUEEN_SCHOOL_ID: ${{ vars.MUEEN_SCHOOL_ID }}
+      MUEEN_PUBLISHABLE_KEY: ${{ secrets.MUEEN_PUBLISHABLE_KEY }}
+      MUEEN_PRINCIPAL_JWT: ${{ secrets.MUEEN_PRINCIPAL_JWT }}
+      MUEEN_TEACHER_JWT: ${{ secrets.MUEEN_TEACHER_JWT }}
+      MUEEN_COORDINATOR_JWT: ${{ secrets.MUEEN_COORDINATOR_JWT }}
+      MUEEN_OTHER_SCHOOL_ID: ${{ vars.MUEEN_OTHER_SCHOOL_ID }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate staging configuration
+        shell: bash
+        run: |
+          test "$MUEEN_PROJECT_LABEL" = "staging"
+          test -n "$MUEEN_STAGING_URL"
+          test -n "$MUEEN_SCHOOL_ID"
+          test -n "$MUEEN_PRINCIPAL_JWT"
+          test -n "$MUEEN_TEACHER_JWT"
+          case "$MUEEN_STAGING_URL" in
+            https://*.supabase.co) ;;
+            *) echo "Invalid staging URL"; exit 1 ;;
+          esac
+
+      - name: Run security tests
+        run: python -m unittest discover -s tests -p "test_teacher_admin.py" -v
