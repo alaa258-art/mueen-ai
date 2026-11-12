@@ -117,8 +117,7 @@ class MueenSecurityTests(unittest.TestCase):
         status, data = request({'action': 'set_active', 'school_id': SCHOOL,
                                 'user_id': 'not-a-uuid', 'is_active': False}, PRINCIPAL)
         self.assertEqual(status, 400, data)
-
-                @unittest.skipUnless(
+     @unittest.skipUnless(
         ALLOW_MUTATIONS and PRINCIPAL and FAKE_TARGET,
         "Requires explicit mutation opt-in and fake target"
     )
