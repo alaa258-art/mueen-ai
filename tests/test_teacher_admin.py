@@ -140,7 +140,7 @@ class MueenSecurityTests(unittest.TestCase):
                 PRINCIPAL
             )
             self.assertEqual(status, 200, data)
-            self.assertEqual(data.get('ok'), True))
+            self.assertEqual(data.get('ok'), True)
 
     finally:
         status, data = request({
