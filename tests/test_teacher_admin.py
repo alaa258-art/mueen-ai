@@ -1,5 +1,47 @@
-headers['apikey'] = PUBLISHABLE
-    req = urllib.request.Request(FUNCTION, data=json.dumps(body).encode(), headers=headers, method='POST')
+
+"""MUEEN V6.3 staging security tests."""
+import json
+import os
+import re
+import unittest
+import urllib.request
+import urllib.error
+
+BASE = os.getenv("MUEEN_STAGING_URL", "").rstrip("/")
+FUNCTION = BASE + "/functions/v1/mueen-teacher-admin"
+PROJECT_LABEL = os.getenv("MUEEN_PROJECT_LABEL", "")
+SCHOOL = os.getenv("MUEEN_SCHOOL_ID", "")
+OTHER = os.getenv("MUEEN_OTHER_SCHOOL_ID", "")
+PRINCIPAL = os.getenv("MUEEN_PRINCIPAL_JWT", "")
+TEACHER = os.getenv("MUEEN_TEACHER_JWT", "")
+COORD = os.getenv("MUEEN_COORDINATOR_JWT", "")
+PUBLISHABLE = os.getenv("MUEEN_PUBLISHABLE_KEY", "")
+ALLOW_MUTATIONS = os.getenv("MUEEN_ALLOW_MUTATIONS") == "YES_STAGING_ONLY"
+FAKE_TARGET = os.getenv("MUEEN_FAKE_TEACHER_USER_ID", "")
+
+UUID = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-"
+    r"[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+    re.I
+)
+
+
+def request(body, token=None):
+    headers = {"Content-Type": "application/json"}
+
+    if token:
+        headers["Authorization"] = "Bearer " + token
+
+    if PUBLISHABLE:
+        headers["apikey"] = PUBLISHABLE
+
+    req = urllib.request.Request(
+        FUNCTION,
+        data=json.dumps(body).encode(),
+        headers=headers,
+        method="POST"
+    )
+
     try:
         with urllib.request.urlopen(req, timeout=25) as response:
             return response.status, json.loads(response.read().decode())
@@ -9,6 +51,9 @@ headers['apikey'] = PUBLISHABLE
         except (ValueError, UnicodeError):
             data = {}
         return exc.code, data
+
+
+
 
 
 def require(condition, message):
