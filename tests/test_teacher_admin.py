@@ -1,59 +1,55 @@
 
-"""MUEEN V6.3 staging security tests."""
+"""MUEEN V6.3 staging teacher-admin security tests.
+
+Read-only by default. Mutation test 11 requires explicit staging opt-in,
+a dedicated fake teacher, and an independently configured matching allowlist.
+"""
 import json
 import os
 import re
 import unittest
-import urllib.request
 import urllib.error
+import urllib.request
+from urllib.parse import urlparse
 
-BASE = os.getenv("MUEEN_STAGING_URL", "").rstrip("/")
-FUNCTION = BASE + "/functions/v1/mueen-teacher-admin"
-PROJECT_LABEL = os.getenv("MUEEN_PROJECT_LABEL", "")
-SCHOOL = os.getenv("MUEEN_SCHOOL_ID", "")
-OTHER = os.getenv("MUEEN_OTHER_SCHOOL_ID", "")
-PRINCIPAL = os.getenv("MUEEN_PRINCIPAL_JWT", "")
-TEACHER = os.getenv("MUEEN_TEACHER_JWT", "")
-COORD = os.getenv("MUEEN_COORDINATOR_JWT", "")
-PUBLISHABLE = os.getenv("MUEEN_PUBLISHABLE_KEY", "")
-ALLOW_MUTATIONS = os.getenv("MUEEN_ALLOW_MUTATIONS") == "YES_STAGING_ONLY"
-FAKE_TARGET = os.getenv("MUEEN_FAKE_TEACHER_USER_ID", "")
+BASE = os.getenv('MUEEN_STAGING_URL', '').rstrip('/')
+FUNCTION = BASE + '/functions/v1/mueen-teacher-admin'
+PROJECT_LABEL = os.getenv('MUEEN_PROJECT_LABEL', '')
+SCHOOL = os.getenv('MUEEN_SCHOOL_ID', '')
+OTHER = os.getenv('MUEEN_OTHER_SCHOOL_ID', '')
+PRINCIPAL = os.getenv('MUEEN_PRINCIPAL_JWT', '')
+TEACHER = os.getenv('MUEEN_TEACHER_JWT', '')
+COORD = os.getenv('MUEEN_COORDINATOR_JWT', '')
+PUBLISHABLE = os.getenv('MUEEN_PUBLISHABLE_KEY', '')
+ALLOW_MUTATIONS = os.getenv('MUEEN_ALLOW_MUTATIONS') == 'YES_STAGING_ONLY'
+FAKE_TARGET = os.getenv('MUEEN_FAKE_TEACHER_USER_ID', '')
+FAKE_ALLOWLIST = os.getenv('MUEEN_FAKE_TEACHER_ALLOWLIST_ID', '')
 
 UUID = re.compile(
-    r"[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-"
-    r"[89ab][0-9a-f]{3}-[0-9a-f]{12}",
-    re.I
+    r'[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-'
+    r'[89ab][0-9a-f]{3}-[0-9a-f]{12}', re.I
 )
 
 
 def request(body, token=None):
-    headers = {"Content-Type": "application/json"}
-
+    headers = {'Content-Type': 'application/json'}
     if token:
-        headers["Authorization"] = "Bearer " + token
-
+        headers['Authorization'] = 'Bearer ' + token
     if PUBLISHABLE:
-        headers["apikey"] = PUBLISHABLE
-
+        headers['apikey'] = PUBLISHABLE
     req = urllib.request.Request(
-        FUNCTION,
-        data=json.dumps(body).encode(),
-        headers=headers,
-        method="POST"
+        FUNCTION, data=json.dumps(body).encode('utf-8'),
+        headers=headers, method='POST'
     )
-
     try:
         with urllib.request.urlopen(req, timeout=25) as response:
-            return response.status, json.loads(response.read().decode())
+            return response.status, json.loads(response.read().decode('utf-8'))
     except urllib.error.HTTPError as exc:
         try:
-            data = json.loads(exc.read().decode())
+            data = json.loads(exc.read().decode('utf-8'))
         except (ValueError, UnicodeError):
             data = {}
         return exc.code, data
-
-
-
 
 
 def require(condition, message):
@@ -64,14 +60,27 @@ def require(condition, message):
 class MueenSecurityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        require(PROJECT_LABEL.lower() == 'staging', 'MUEEN_PROJECT_LABEL must equal staging')
-        require(BASE.startswith('https://') and '.supabase.co' in BASE,
-                'Set a valid HTTPS Supabase MUEEN_STAGING_URL')
+        require(PROJECT_LABEL.lower() == 'staging',
+                'MUEEN_PROJECT_LABEL must equal staging')
+        parsed = urlparse(BASE)
+        require(parsed.scheme == 'https' and
+                bool(re.fullmatch(r'[a-z0-9-]+\.supabase\.co', parsed.hostname or '')) and
+                not parsed.username and not parsed.password and not parsed.port and
+                parsed.path in ('', '/') and not parsed.query and not parsed.fragment,
+                'Set a valid staging Supabase HTTPS project URL')
         require(all(UUID.fullmatch(v) for v in (SCHOOL, OTHER)),
                 'Set valid MUEEN_SCHOOL_ID and MUEEN_OTHER_SCHOOL_ID')
         require(SCHOOL != OTHER, 'The two school IDs must differ')
         require(all((PRINCIPAL, TEACHER, COORD, PUBLISHABLE)),
                 'Missing one or more required staging JWTs or publishable key')
+        if ALLOW_MUTATIONS:
+            require(UUID.fullmatch(FAKE_TARGET or '') is not None,
+                    'Mutation opt-in requires a valid fake teacher user ID')
+            require(UUID.fullmatch(FAKE_ALLOWLIST or '') is not None and
+                    FAKE_TARGET == FAKE_ALLOWLIST,
+                    'Fake teacher ID must match independent allowlist ID')
+            require(FAKE_TARGET not in (SCHOOL, OTHER),
+                    'Fake target cannot be a school ID')
 
     def test_01_anonymous_denied(self):
         status, data = request({'action': 'list', 'school_id': SCHOOL})
@@ -86,13 +95,17 @@ class MueenSecurityTests(unittest.TestCase):
         self.assertEqual(status, 403, data)
 
     def test_04_teacher_cannot_invite(self):
-        status, data = request({'action': 'invite', 'school_id': SCHOOL,
-                                'email': 'no-send@example.invalid', 'role': 'teacher'}, TEACHER)
+        status, data = request({
+            'action': 'invite', 'school_id': SCHOOL,
+            'email': 'no-send@example.invalid', 'role': 'teacher'
+        }, TEACHER)
         self.assertEqual(status, 403, data)
 
     def test_05_teacher_cannot_deactivate(self):
-        status, data = request({'action': 'set_active', 'school_id': SCHOOL,
-                                'user_id': SCHOOL, 'is_active': False}, TEACHER)
+        status, data = request({
+            'action': 'set_active', 'school_id': SCHOOL,
+            'user_id': SCHOOL, 'is_active': False
+        }, TEACHER)
         self.assertEqual(status, 403, data)
 
     def test_06_coordinator_cannot_list(self):
@@ -109,77 +122,47 @@ class MueenSecurityTests(unittest.TestCase):
         self.assertEqual(status, 403, data)
 
     def test_09_invalid_role_invite_rejected(self):
-        status, data = request({'action': 'invite', 'school_id': SCHOOL,
-                                'email': 'no-send@example.invalid', 'role': 'principal'}, PRINCIPAL)
-        self.assertEqual(status, 400, data)
-
-        def test_10_invalid_target_rejected(self):
-        status, data = request(
-            {
-                'action': 'set_active',
-                'school_id': SCHOOL,
-                'user_id': 'not-a-uuid',
-                'is_active': False
-            },
-            PRINCIPAL
-        )
-        self.assertEqual(status, 400, data)
-
-    @unittest.skipUnless(
-        ALLOW_MUTATIONS and PRINCIPAL and FAKE_TARGET,
-        "Requires explicit mutation opt-in and fake target"
-    )
-    def test_11_deactivate_and_reactivate_fake_teacher(self):
-            status, data = request(
-                {
-                    'action': 'set_active',
-                    'school_id': SCHOOL,
-                    'user_id': FAKE_TARGET,
-                    'is_active': active
-                },
-                PRINCIPAL
-            )
-            self.assertEqual(status, 200, data)
-            self.assertEqual(data.get('ok'), True)
-
-    finally:
         status, data = request({
-            'action': 'set_active',
-            'school_id': SCHOOL,
-            'user_id': FAKE_TARGET,
-            'is_active': True
+            'action': 'invite', 'school_id': SCHOOL,
+            'email': 'no-send@example.invalid', 'role': 'principal'
         }, PRINCIPAL)
+        self.assertEqual(status, 400, data)
 
-        self.assertEqual(
-            status, 200,
-            f'CRITICAL: Reactivation failed: {data}'
-        )
-        self.assertEqual(data.get('ok'), True)(self):
-        # A missing opt-in is a failure, not a silent skip in the full suite.
-        require(ALLOW_MUTATIONS, 'Set MUEEN_ALLOW_MUTATIONS=YES_STAGING_ONLY explicitly')
-        require(UUID.fullmatch(FAKE_TARGET or '') and FAKE_TARGET == FAKE_ALLOWLIST,
-                'Fake teacher ID must be valid and match separately configured allowlist ID')
-        require(FAKE_TARGET not in (SCHOOL, OTHER), 'Fake target cannot be a school ID')
+    def test_10_invalid_target_rejected(self):
+        status, data = request({
+            'action': 'set_active', 'school_id': SCHOOL,
+            'user_id': 'not-a-uuid', 'is_active': False
+        }, PRINCIPAL)
+        self.assertEqual(status, 400, data)
 
+    @unittest.skipUnless(ALLOW_MUTATIONS,
+                         'Requires explicit mutation opt-in on isolated staging')
+    def test_11_deactivate_and_reactivate_fake_teacher(self):
         status, data = request({'action': 'list', 'school_id': SCHOOL}, PRINCIPAL)
         self.assertEqual(status, 200, data)
-        members = [m for m in data.get('members', []) if m.get('user_id') == FAKE_TARGET]
-        self.assertEqual(len(members), 1, 'Fake target must be a member of staging school')
+        members = [m for m in data.get('members', [])
+                   if m.get('user_id') == FAKE_TARGET]
+        self.assertEqual(len(members), 1, 'Fake target must be a staging member')
         member = members[0]
-        self.assertEqual(member.get('role'), 'teacher', 'Target must have teacher role')
-        self.assertIs(type(member.get('is_active')), bool, 'Missing original active state')
+        self.assertEqual(member.get('role'), 'teacher',
+                         'Fake target must have teacher role')
+        self.assertIs(type(member.get('is_active')), bool,
+                      'Missing original active state')
         original = member['is_active']
 
         def set_active(value):
-            status, payload = request({'action': 'set_active', 'school_id': SCHOOL,
-                                       'user_id': FAKE_TARGET, 'is_active': value}, PRINCIPAL)
+            status, payload = request({
+                'action': 'set_active', 'school_id': SCHOOL,
+                'user_id': FAKE_TARGET, 'is_active': value
+            }, PRINCIPAL)
             self.assertEqual(status, 200, payload)
             self.assertIs(payload.get('ok'), True)
 
         def verify_active(expected):
             status, payload = request({'action': 'list', 'school_id': SCHOOL}, PRINCIPAL)
             self.assertEqual(status, 200, payload)
-            rows = [m for m in payload.get('members', []) if m.get('user_id') == FAKE_TARGET]
+            rows = [m for m in payload.get('members', [])
+                    if m.get('user_id') == FAKE_TARGET]
             self.assertEqual(len(rows), 1)
             self.assertIs(rows[0].get('is_active'), expected)
 
@@ -189,7 +172,6 @@ class MueenSecurityTests(unittest.TestCase):
             set_active(True)
             verify_active(True)
         finally:
-            # Always attempt to restore the initial membership state.
             set_active(original)
             verify_active(original)
 
