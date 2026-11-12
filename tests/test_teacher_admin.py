@@ -113,16 +113,23 @@ class MueenSecurityTests(unittest.TestCase):
                                 'email': 'no-send@example.invalid', 'role': 'principal'}, PRINCIPAL)
         self.assertEqual(status, 400, data)
 
-    def test_10_invalid_target_rejected(self):
-        status, data = request({'action': 'set_active', 'school_id': SCHOOL,
-                                'user_id': 'not-a-uuid', 'is_active': False}, PRINCIPAL)
+        def test_10_invalid_target_rejected(self):
+        status, data = request(
+            {
+                'action': 'set_active',
+                'school_id': SCHOOL,
+                'user_id': 'not-a-uuid',
+                'is_active': False
+            },
+            PRINCIPAL
+        )
         self.assertEqual(status, 400, data)
-     @unittest.skipUnless(
+
+    @unittest.skipUnless(
         ALLOW_MUTATIONS and PRINCIPAL and FAKE_TARGET,
         "Requires explicit mutation opt-in and fake target"
     )
     def test_11_deactivate_and_reactivate_fake_teacher(self):
-        for active in (False, True):
             status, data = request(
                 {
                     'action': 'set_active',
