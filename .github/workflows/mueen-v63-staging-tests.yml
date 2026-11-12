@@ -53,6 +53,16 @@ jobs:
       - name: Check Python syntax
         run: python -m py_compile tests/test_teacher_admin.py
 
+      - name: Generate fresh staging JWTs
+        env:
+          MUEEN_PRINCIPAL_EMAIL: ${{ secrets.MUEEN_PRINCIPAL_EMAIL }}
+          MUEEN_PRINCIPAL_PASSWORD: ${{ secrets.MUEEN_PRINCIPAL_PASSWORD }}
+          MUEEN_TEACHER_EMAIL: ${{ secrets.MUEEN_TEACHER_EMAIL }}
+          MUEEN_TEACHER_PASSWORD: ${{ secrets.MUEEN_TEACHER_PASSWORD }}
+          MUEEN_COORDINATOR_EMAIL: ${{ secrets.MUEEN_COORDINATOR_EMAIL }}
+          MUEEN_COORDINATOR_PASSWORD: ${{ secrets.MUEEN_COORDINATOR_PASSWORD }}
+        run: python tests/staging_auth.py
+
       - name: Run security tests
         env:
           MUEEN_FAKE_TEACHER_USER_ID: ${{ secrets.MUEEN_FAKE_TEACHER_USER_ID }}
