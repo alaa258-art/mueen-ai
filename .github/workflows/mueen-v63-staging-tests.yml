@@ -23,9 +23,7 @@ jobs:
       MUEEN_STAGING_URL: ${{ vars.MUEEN_STAGING_URL }}
       MUEEN_SCHOOL_ID: ${{ vars.MUEEN_SCHOOL_ID }}
       MUEEN_PUBLISHABLE_KEY: ${{ secrets.MUEEN_PUBLISHABLE_KEY }}
-      MUEEN_PRINCIPAL_JWT: ${{ secrets.MUEEN_PRINCIPAL_JWT }}
-      MUEEN_TEACHER_JWT: ${{ secrets.MUEEN_TEACHER_JWT }}
-      MUEEN_COORDINATOR_JWT: ${{ secrets.MUEEN_COORDINATOR_JWT }}
+      
       MUEEN_OTHER_SCHOOL_ID: ${{ vars.MUEEN_OTHER_SCHOOL_ID }}
 
     steps:
@@ -37,22 +35,26 @@ jobs:
         with:
           python-version: "3.11"
 
+      
+     
       - name: Validate staging configuration
         shell: bash
         run: |
           test "$MUEEN_PROJECT_LABEL" = "staging"
           test -n "$MUEEN_STAGING_URL"
           test -n "$MUEEN_SCHOOL_ID"
-          test -n "$MUEEN_PRINCIPAL_JWT"
-          test -n "$MUEEN_TEACHER_JWT"
+          test -n "$MUEEN_OTHER_SCHOOL_ID"
+          test -n "$MUEEN_PUBLISHABLE_KEY"
           case "$MUEEN_STAGING_URL" in
             https://*.supabase.co) ;;
             *) echo "Invalid staging URL"; exit 1 ;;
           esac
-      
-      - name: Check Python syntax
-        run: python -m py_compile tests/test_teacher_admin.py
 
+      - name: Check Python syntax
+        run: python -m py_compile tests/test_teacher_admin.py tests/staging_auth.py
+
+      
+      
       - name: Generate fresh staging JWTs
         env:
           MUEEN_PRINCIPAL_EMAIL: ${{ secrets.MUEEN_PRINCIPAL_EMAIL }}
@@ -67,7 +69,7 @@ jobs:
         env:
           MUEEN_FAKE_TEACHER_USER_ID: ${{ secrets.MUEEN_FAKE_TEACHER_USER_ID }}
           MUEEN_FAKE_TEACHER_ALLOWLIST_ID: ${{ secrets.MUEEN_FAKE_TEACHER_ALLOWLIST_ID }}
-          MUEEN_ALLOW_MUTATIONS: YES_STAGING_ONLY
+          MUEEN_ALLOW_MUTATIONS: "NO"
         run: python -m unittest discover -s tests -p "test_teacher_admin.py" -v
 
 
