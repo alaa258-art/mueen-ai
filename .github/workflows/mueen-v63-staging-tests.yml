@@ -1,4 +1,5 @@
 
+
 name: MUEEN V6.3 Staging Security Tests
 
 on:
@@ -23,7 +24,6 @@ jobs:
       MUEEN_STAGING_URL: ${{ vars.MUEEN_STAGING_URL }}
       MUEEN_SCHOOL_ID: ${{ vars.MUEEN_SCHOOL_ID }}
       MUEEN_PUBLISHABLE_KEY: ${{ secrets.MUEEN_PUBLISHABLE_KEY }}
-      
       MUEEN_OTHER_SCHOOL_ID: ${{ vars.MUEEN_OTHER_SCHOOL_ID }}
 
     steps:
@@ -35,8 +35,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      
-     
       - name: Validate staging configuration
         shell: bash
         run: |
@@ -53,8 +51,6 @@ jobs:
       - name: Check Python syntax
         run: python -m py_compile tests/test_teacher_admin.py tests/staging_auth.py
 
-      
-      
       - name: Generate fresh staging JWTs
         env:
           MUEEN_PRINCIPAL_EMAIL: ${{ secrets.MUEEN_PRINCIPAL_EMAIL }}
@@ -71,5 +67,4 @@ jobs:
           MUEEN_FAKE_TEACHER_ALLOWLIST_ID: ${{ secrets.MUEEN_FAKE_TEACHER_ALLOWLIST_ID }}
           MUEEN_ALLOW_MUTATIONS: "NO"
         run: python -m unittest discover -s tests -p "test_teacher_admin.py" -v
-
 
