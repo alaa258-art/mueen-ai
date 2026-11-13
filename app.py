@@ -1164,6 +1164,9 @@ with logout_col:
         st.rerun()
 st.session_state["mueen_school_id"] = selected_school["id"]
 st.session_state["mueen_school_role"] = selected_school["role"]
+# V6.3 — principal-only teacher management (server-side authorization in Edge Function)
+from mueen_teacher_admin import render_teacher_admin
+render_teacher_admin(selected_school["id"], selected_school["role"])
 # MUEEN AI — تنسيق مساحة العمل فقط، بعد نجاح تسجيل الدخول
 st.markdown("""
 <style>
