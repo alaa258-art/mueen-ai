@@ -69,7 +69,7 @@ jobs:
         env:
           MUEEN_FAKE_TEACHER_USER_ID: ${{ secrets.MUEEN_FAKE_TEACHER_USER_ID }}
           MUEEN_FAKE_TEACHER_ALLOWLIST_ID: ${{ secrets.MUEEN_FAKE_TEACHER_ALLOWLIST_ID }}
-          MUEEN_ALLOW_MUTATIONS: YES_STAGING_ONLY
+          MUEEN_ALLOW_MUTATIONS: "NO"
         run: python -m unittest discover -s tests -p "test_teacher_admin.py" -v
 
 
