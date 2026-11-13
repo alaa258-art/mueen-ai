@@ -28,13 +28,33 @@ Deno.serve(async (req) => {
     .eq('role', 'principal').eq('is_active', true).maybeSingle();
   if (roleError || !principal) return json({ error: 'Principal access required' }, 403);
 
-  if (body.action === 'list') {
-    const { data, error } = await admin.from('school_memberships')
-      .select('user_id,role,is_active,created_at').eq('school_id', schoolId).order('created_at');
-    if (error) return json({ error: 'Unable to list memberships' }, 500);
-    // No email lookup here: admin Auth users listing would expose other schools.
-    return json({ members: data || [] });
+  
+if (body.action === 'list') {
+  const { data, error } = await admin
+    .from('school_memberships')
+    .select('user_id,role,is_active,created_at')
+    .eq('school_id', schoolId)
+    .order('created_at');
+
+  if (error) {
+    return json({ error: 'Unable to list memberships' }, 500);
   }
+
+  const members = await Promise.all(
+    (data || []).map(async (member) => {
+      const { data: authData, error: authError } =
+        await admin.auth.admin.getUserById(member.user_id);
+
+      return {
+        ...member,
+        email: authError ? null : (authData.user?.email ?? null),
+      };
+    })
+  );
+
+  return json({ members });
+}
+
   if (body.action === 'invite') {
     const email = String(body.email || '').trim().toLowerCase();
     const role = body.role;
