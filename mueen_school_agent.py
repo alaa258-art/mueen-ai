@@ -137,6 +137,15 @@ def render_school_agent(get_client,get_school,get_user):
                     
                 previous_fingerprint = parent['report'].get('cohort_fingerprint')
 
+                
+                if current_before['Student'].nunique() != int(parent['report'].get('students_count') or 0):
+                    raise ValueError(
+                        'عدد الطلاب لا يطابق الدورة السابقة؛ '
+                        'يلزم توثيق اختلاف العينة قبل الربط.'
+                    )
+
+                previous_fingerprint = parent['report'].get('cohort_fingerprint')
+
                 if not previous_fingerprint:
                     raise ValueError(
                         'الدورة السابقة لا تحتوي على بصمة المجموعة. '
@@ -161,7 +170,6 @@ def render_school_agent(get_client,get_school,get_user):
                         'لا يجوز ربط نتائج مجموعتين مختلفتين.'
                     )
 
-                    raise ValueError('عدد الطلاب لا يطابق الدورة السابقة؛ يلزم توثيق اختلاف العينة قبل الربط.')
             report,hashval=make_report(subject,grade,threshold,old,notes,before,after,same,parent)
             # Do not save an identical pair of skill summaries as a new progress stage.
             new_summary=report['skill_summary']
