@@ -1,62 +1,9 @@
-"""MUEEN school agent: authenticated, persistent, teacher-reviewed school cycles."""
-import hashlib
-import json
-from datetime import datetime, timezone
-import pandas as pd
-import streamlit as st
-from mueen_school_pilot import analyze, normalize
-
-STRATEGIES = (
-    'تمثيل بصري للمعطيات وخريطة حل مع تبرير الخطوات',
-    'تحليل خطأ نموذجي ومقارنة حلين مع تغذية راجعة',
-    'أمثلة متدرجة مع سحب الدعم ثم تقييم مستقل',
-    'تعليم الأقران واسترجاع نشط ثم اختبار احتفاظ',
-)
-
-def decide(summary, paired, prior, threshold):
-    result=[]
-    for _,r in summary.iterrows():
-        skill=str(r['المهارة']); score=float(r['البعدي %'])
-        history=[x for x in prior if x.get('skill')==skill]
-        used=[x.get('strategy','') for x in history]
-        if score>=threshold:
-            proposed='تثبيت وإثراء وتقييم احتفاظ مستقل'
-            reason='بلغ متوسط المهارة حد الإتقان؛ تحقق من أداء الأفراد قبل إغلاق الدعم.'
-        else:
-            stagnated=int(r['عدد بلا تحسن'])
-            # Choose a different evidence-aligned modality than the last recorded choice.
-            options=STRATEGIES if stagnated else (STRATEGIES[2],STRATEGIES[3],STRATEGIES[0],STRATEGIES[1])
-            proposed=next((s for s in options if s not in used), options[len(history)%len(options)])
-            reason=('أداء دون حد الإتقان مع حالات ثبات أو تراجع؛ نغيّر أسلوب التدريس.' if stagnated else
-                    'تحسن جزئي دون بلوغ حد الإتقان؛ يلزم دعم متدرج وإعادة قياس.')
-        affected=paired[(paired['Skill']==skill)&(paired['pct_after']<threshold)]
-        result.append({'skill':skill,'baseline_pct':float(r['القبلي %']),'followup_pct':score,
-            'delta_pp':float(r['التغير (نقطة)']),'stagnant_count':int(r['عدد بلا تحسن']),
-            'priority':'support' if score<threshold else 'maintain','strategy':proposed,
-            'reason':reason,'student_codes_for_teacher':[str(s) for s in affected['Student'].tolist()],
-            'prior_cycles_consulted':len(history)})
-    return result
-
-def make_report(subject,grade,threshold,old_strategy,notes,before,after,history,parent_cycle=None):
-    paired,summary=analyze(before,after,threshold)
-    prior=[d for c in history for d in (c.get('report') or {}).get('decisions',[])]
-    decisions=decide(summary,paired,prior,threshold)
-    # Store aggregate results and provenance, not individual assessment rows.
-    report={'schema_version':1,'subject':subject.strip(),'grade':int(grade),'threshold':int(threshold),
-        'previous_intervention':old_strategy.strip(),'execution_notes':notes.strip(),
+'previous_intervention':old_strategy.strip(),'execution_notes':notes.strip(),
         'skill_summary':summary.to_dict('records'),'decisions':decisions,
+        'decision_quality':evaluate_decisions(decisions,threshold),
+        'tools_used':['normalize','analyze','decide','evaluate_decisions'],
         'students_count':int(paired['Student'].nunique()),
-             'cohort_fingerprint': hashlib.sha256(
-    json.dumps(
-        sorted(
-            [
-                [str(r['Student']), str(r['Skill'])]
-                for _, r in paired.iterrows()
-            ]
-        ),
-        ensure_ascii=False
-    ).encode('utf-8')
-).hexdigest(),
+        'cohort_fingerprint': cohort_fingerprint(paired),
         'prior_saved_cycles':len(history),
         'parent_cycle_id':str(parent_cycle['id']) if parent_cycle else None,
         'assessment_stage':'followup_next' if parent_cycle else 'initial',
@@ -88,7 +35,7 @@ def render_school_agent(get_client,get_school,get_user):
         cycles=(client.table('mueen_school_cycles').select('id,report,status,created_at,created_by,approved_at')
             .eq('school_id',school).order('created_at',desc=True).limit(100).execute().data or [])
     except Exception as exc:
-        st.error('تعذر قراءة ذاكرة الوكيل. شغّل ملف SQL المرفق أولًا، ثم راجع صلاحيات RLS. '+str(exc)[:200]);return
+        st.error('تعذر قراءة ذاكرة الوكيل. تحقق من اتصال Supabase وسياسات RLS.');return
     st.metric('الدورات المحفوظة للمدرسة',len(cycles))
     with st.expander('📚 ذاكرة الوكيل — الدورات المحفوظة',expanded=False):
         for c in cycles[:20]:
@@ -112,7 +59,9 @@ def render_school_agent(get_client,get_school,get_user):
         submitted=st.form_submit_button('تحليل وإعداد قرار جديد')
     if submitted:
         try:
-            if not subject.strip() or not old.strip(): raise ValueError('المادة ووصف التدخل السابق مطلوبان')
+            if not subject.strip(): raise ValueError('المادة مطلوبة')
+            if link_mode=='متابعة جديدة لدورة معتمدة' and not old.strip():
+                raise ValueError('وصف التدخل السابق مطلوب عند تسجيل متابعة')
             if b is None or a is None:raise ValueError('ارفع ملفي CSV')
             before=pd.read_csv(b,dtype={'Student':'string','Skill':'string'})
             after=pd.read_csv(a,dtype={'Student':'string','Skill':'string'})
@@ -133,42 +82,14 @@ def render_school_agent(get_client,get_school,get_user):
                         for k,g in current_before.groupby('Skill')}
                 if any(abs(actual[k]-prev[k])>0.02 for k in prev):
                     raise ValueError('ملف القبلي للمتابعة لا يطابق نتائج البعدي السابق. ارفع ملف البعدي الأول نفسه بوصفه قبلي المتابعة.')
-                if current_before['Student'].nunique()!=int(parent['report'].get('students_count') or 0):
-                    
-                previous_fingerprint = parent['report'].get('cohort_fingerprint')
-
-                
                 if current_before['Student'].nunique() != int(parent['report'].get('students_count') or 0):
-                    raise ValueError(
-                        'عدد الطلاب لا يطابق الدورة السابقة؛ '
-                        'يلزم توثيق اختلاف العينة قبل الربط.'
-                    )
-
+                    raise ValueError('عدد الطلاب لا يطابق الدورة السابقة؛ يلزم توثيق اختلاف العينة قبل الربط.')
                 previous_fingerprint = parent['report'].get('cohort_fingerprint')
-
                 if not previous_fingerprint:
-                    raise ValueError(
-                        'الدورة السابقة لا تحتوي على بصمة المجموعة. '
-                        'لا يمكن ربط المتابعة تلقائيًا؛ يلزم اعتماد دورة جديدة.'
-                    )
-
-                current_fingerprint = hashlib.sha256(
-                    json.dumps(
-                        sorted(
-                            [
-                                [str(r['Student']), str(r['Skill'])]
-                                for _, r in current_before.iterrows()
-                            ]
-                        ),
-                        ensure_ascii=False
-                    ).encode('utf-8')
-                ).hexdigest()
-
+                    raise ValueError('الدورة السابقة لا تحتوي على بصمة المجموعة؛ لا يمكن ربطها تلقائيًا.')
+                current_fingerprint = cohort_fingerprint(current_before)
                 if current_fingerprint != previous_fingerprint:
-                    raise ValueError(
-                        'مجموعة الطلاب والمهارات لا تطابق الدورة السابقة. '
-                        'لا يجوز ربط نتائج مجموعتين مختلفتين.'
-                    )
+                    raise ValueError('مجموعة الطلاب والمهارات لا تطابق الدورة السابقة.')
 
             report,hashval=make_report(subject,grade,threshold,old,notes,before,after,same,parent)
             # Do not save an identical pair of skill summaries as a new progress stage.
@@ -178,7 +99,8 @@ def render_school_agent(get_client,get_school,get_user):
             if any(skill_key((c.get('report') or {}).get('skill_summary') or [])==skill_key(new_summary) for c in same):
                 raise ValueError('نتائج المهارات مطابقة لدورة معتمدة سابقة؛ لا تُسجل كتدخل جديد.')
             st.session_state['mueen_agent_preview']={'school':school,'user':user,'report':report,'hash':hashval}
-        except Exception as exc:st.error('تعذر التحليل: '+str(exc)[:350])
+        except ValueError as exc: st.error('تعذر التحليل: '+str(exc)[:350])
+        except Exception: st.error('حدث خطأ غير متوقع أثناء التحليل. راجع سجلات الخادم.')
     preview=st.session_state.get('mueen_agent_preview')
     if preview and preview['school']==school and preview['user']==user:
         report=preview['report']
@@ -198,18 +120,9 @@ def render_school_agent(get_client,get_school,get_user):
                         'evidence_hash':preview['hash'],'report':report,'status':'pending'}).execute()
                     st.success('حُفظ القرار مع سجل تدقيق.');st.session_state.pop('mueen_agent_preview',None)
                     st.rerun()
-            except Exception as exc:st.error('فشل الحفظ: '+str(exc)[:350])
+            except Exception: st.error('فشل الحفظ. تحقق من الاتصال والصلاحيات.')
     pending=[c for c in cycles if c['status']=='pending' and str(c['created_by'])==user]
     if pending:
         st.subheader('✍️ مراجعة المعلم واعتماد القرار')
         selected=st.selectbox('الدورة المراد مراجعتها',[c['id'] for c in pending])
         decision=next(c for c in pending if c['id']==selected)
-        st.json((decision.get('report') or {}).get('decisions',[]),expanded=False)
-        checked=st.checkbox('راجعتُ الأدلة والتوصيات وأتحمل مسؤولية قرار التنفيذ التربوي')
-        if st.button('اعتماد القرار وحفظه نهائيًا',disabled=not checked):
-            try:
-                client.table('mueen_school_cycles').update({'status':'approved'}).eq('id',selected).eq('school_id',school).eq('created_by',user).eq('status','pending').execute()
-                st.success('حُفظ الاعتماد؛ راجع ذاكرة الوكيل بعد تحديث الصفحة.');st.rerun()
-            except Exception as exc:st.error('فشل الاعتماد: '+str(exc)[:350])
-    st.download_button('📥 تنزيل سجل الأدلة (بدون أسماء حقيقية)',json.dumps(cycles,ensure_ascii=False,indent=2,default=str),
-        'MUEEN_School_Cycles.json',mime='application/json')
