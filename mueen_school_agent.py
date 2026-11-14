@@ -46,6 +46,17 @@ def make_report(subject,grade,threshold,old_strategy,notes,before,after,history,
         'previous_intervention':old_strategy.strip(),'execution_notes':notes.strip(),
         'skill_summary':summary.to_dict('records'),'decisions':decisions,
         'students_count':int(paired['Student'].nunique()),
+             'cohort_fingerprint': hashlib.sha256(
+    json.dumps(
+        sorted(
+            [
+                [str(r['Student']), str(r['Skill'])]
+                for _, r in paired.iterrows()
+            ]
+        ),
+        ensure_ascii=False
+    ).encode('utf-8')
+).hexdigest(),
         'prior_saved_cycles':len(history),
         'parent_cycle_id':str(parent_cycle['id']) if parent_cycle else None,
         'assessment_stage':'followup_next' if parent_cycle else 'initial',
@@ -123,6 +134,33 @@ def render_school_agent(get_client,get_school,get_user):
                 if any(abs(actual[k]-prev[k])>0.02 for k in prev):
                     raise ValueError('ملف القبلي للمتابعة لا يطابق نتائج البعدي السابق. ارفع ملف البعدي الأول نفسه بوصفه قبلي المتابعة.')
                 if current_before['Student'].nunique()!=int(parent['report'].get('students_count') or 0):
+                    
+                previous_fingerprint = parent['report'].get('cohort_fingerprint')
+
+                if not previous_fingerprint:
+                    raise ValueError(
+                        'الدورة السابقة لا تحتوي على بصمة المجموعة. '
+                        'لا يمكن ربط المتابعة تلقائيًا؛ يلزم اعتماد دورة جديدة.'
+                    )
+
+                current_fingerprint = hashlib.sha256(
+                    json.dumps(
+                        sorted(
+                            [
+                                [str(r['Student']), str(r['Skill'])]
+                                for _, r in current_before.iterrows()
+                            ]
+                        ),
+                        ensure_ascii=False
+                    ).encode('utf-8')
+                ).hexdigest()
+
+                if current_fingerprint != previous_fingerprint:
+                    raise ValueError(
+                        'مجموعة الطلاب والمهارات لا تطابق الدورة السابقة. '
+                        'لا يجوز ربط نتائج مجموعتين مختلفتين.'
+                    )
+
                     raise ValueError('عدد الطلاب لا يطابق الدورة السابقة؛ يلزم توثيق اختلاف العينة قبل الربط.')
             report,hashval=make_report(subject,grade,threshold,old,notes,before,after,same,parent)
             # Do not save an identical pair of skill summaries as a new progress stage.
