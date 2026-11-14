@@ -82,14 +82,14 @@ def render_school_agent(get_client, get_school, get_user):
         for c in cycles[:30]:
             rep = c.get('report') or {}
             st.write(f"{c['created_at']} | {rep.get('subject','')} | الصف {rep.get('grade','')} | {c['status']} | {c['id']}")
-            if c['status'] == 'draft' and str(c['created_by']) == user and role in ('teacher', 'coordinator', 'principal'):
+            if c['status'] in ('draft', 'pending') and str(c['created_by']) == user and role in ('teacher', 'coordinator', 'principal'):
                 confirmed = st.checkbox('راجعت نتائج هذه الدورة وأوافق على اعتماد توصياتها', key='confirm_' + str(c['id']))
                 if st.button('✅ اعتماد الدورة', key='approve_' + str(c['id']), disabled=not confirmed):
                     try:
                         updated = (client.table('mueen_school_cycles')
                                    .update({'status': 'approved', 'approved_at': datetime.now(timezone.utc).isoformat()})
                                    .eq('id', c['id']).eq('school_id', school).eq('created_by', user)
-                                   .eq('status', 'draft').execute().data or [])
+                                   .in_('status', ['draft', 'pending']).execute().data or [])
                         if not updated: raise RuntimeError('لم يُعتمد السجل؛ تحقق من الصلاحيات والحالة')
                         st.success('تم اعتماد الدورة'); st.rerun()
                     except Exception as exc: st.error('تعذر الاعتماد: ' + str(exc)[:300])
