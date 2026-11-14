@@ -1,0 +1,72 @@
+
+name: MUEEN AI - Release V6.3 and Start V7.0
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type RELEASE_V63 to confirm"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mueen-version-transition
+  cancel-in-progress: false
+
+jobs:
+  release-and-branch:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [ "$CONFIRMATION" != "RELEASE_V63" ]; then
+            echo "Incorrect confirmation"
+            exit 1
+          fi
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify release and branch do not exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch origin --tags
+          if git rev-parse -q --verify "refs/tags/v6.3.0"; then
+            echo "Tag v6.3.0 already exists"
+            exit 1
+          fi
+          if git ls-remote --exit-code --heads origin develop/v7.0-agent; then
+            echo "V7.0 branch already exists"
+            exit 1
+          fi
+          if gh release view v6.3.0 >/dev/null 2>&1; then
+            echo "Release already exists"
+            exit 1
+          fi
+
+      - name: Create release tag and V7.0 branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a v6.3.0 -m "MUEEN AI V6.3 stable release"
+          git push origin refs/tags/v6.3.0
+          git push origin HEAD:refs/heads/develop/v7.0-agent
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v6.3.0 \
+            --title "MUEEN AI V6.3 - Teacher Management" \
+            --notes "V6.3 introduces principal-only teacher management, membership administration, server-side authorization, audit logging, and staging security tests. Production read-only membership listing was verified. Invitation and membership mutation operations have not yet been validated in production."
