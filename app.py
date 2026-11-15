@@ -1088,23 +1088,7 @@ export default function(component) {
 
             tokens = result.tokens
 
-            status = result.status
-            if status:
-                st.caption(
-                    "فحص رابط الدعوة: "
-                    f"Access={status.get('has_access')}, "
-                    f"Refresh={status.get('has_refresh')}, "
-                    f"Type={status.get('invitation_type')}"
-                )
-
-            status = result.status
-            if status:
-                st.caption(
-                    "فحص رابط الدعوة: "
-                    f"Access={status.get('has_access')}, "
-                    f"Refresh={status.get('has_refresh')}, "
-                    f"Type={status.get('invitation_type')}"
-                )
+            
             if tokens:
                 try:
                     response = auth_client.auth.set_session(
