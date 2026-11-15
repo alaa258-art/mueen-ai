@@ -1043,9 +1043,10 @@ if not st.session_state.get("mueen_access_token"):
         st.caption("أنشئ كلمة مرور لحسابك في مُعين AI.")
 
         if not st.session_state.get("mueen_invite_verified"):
+            
             invite_receiver = st.components.v2.component(
                 "mueen_invite_receiver",
-                
+                js="""
 export default function(component) {
     const { setTriggerValue } = component;
     const params = new URLSearchParams(
@@ -1056,7 +1057,6 @@ export default function(component) {
     const refresh = params.get("refresh_token");
     const type = params.get("type");
 
-    // إرسال حالة الفحص فقط، دون كشف أي رموز
     setTriggerValue("status", {
         has_access: Boolean(access),
         has_refresh: Boolean(refresh),
@@ -1070,15 +1070,26 @@ export default function(component) {
         });
     }
 }
-
+                """,
             )
 
             result = invite_receiver(
                 key="mueen_invite_component",
                 on_tokens_change=lambda: None,
+                on_status_change=lambda: None,
             )
 
             tokens = result.tokens
+
+            status = result.status
+            if status:
+                st.caption(
+                    "فحص رابط الدعوة: "
+                    f"Access={status.get('has_access')}, "
+                    f"Refresh={status.get('has_refresh')}, "
+                    f"Type={status.get('invitation_type')}"
+                )
+
                         status = result.status
             if status:
                 st.caption(
