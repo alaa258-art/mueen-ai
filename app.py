@@ -1036,14 +1036,128 @@ if not st.session_state.get("mueen_access_token"):
             else "Supabase could not be initialized. Check your Streamlit Secrets."
         )
         st.stop()
-    # مسار تفعيل حساب المعلم
+    
+    # تفعيل دعوة المعلم داخل Streamlit
     if st.query_params.get("activation") == "teacher":
-        st.info(
-            "مرحبًا بك في مُعين AI. "
-            "تم فتح مسار تفعيل حساب المعلم، "
-            "وجارٍ استكمال آلية إنشاء كلمة المرور."
-        )
+        st.subheader("🔐 تفعيل حساب المعلم")
+        st.caption("أنشئ كلمة مرور لحسابك في مُعين AI.")
+
+        if not st.session_state.get("mueen_invite_verified"):
+            invite_receiver = st.components.v2.component(
+                "mueen_invite_receiver",
+                js="""
+                export default function(component) {
+                    const { setTriggerValue } = component;
+                    const params = new URLSearchParams(
+                        window.location.hash.slice(1)
+                    );
+
+                    const access = params.get("access_token");
+                    const refresh = params.get("refresh_token");
+                    const type = params.get("type");
+
+                    if (access && refresh && type === "invite") {
+                        // إزالة رموز الدخول من عنوان المتصفح فور قراءتها
+                        window.history.replaceState(
+                            null,
+                            "",
+                            window.location.pathname + window.location.search
+                        );
+
+                        setTriggerValue("tokens", {
+                            access_token: access,
+                            refresh_token: refresh
+                        });
+                    }
+                }
+                """,
+            )
+
+            result = invite_receiver(
+                key="mueen_invite_component",
+                on_tokens_change=lambda: None,
+            )
+
+            tokens = result.tokens
+            if tokens:
+                try:
+                    response = auth_client.auth.set_session(
+                        tokens["access_token"],
+                        tokens["refresh_token"],
+                    )
+                    if not response.session:
+                        raise ValueError("Invalid invitation session")
+
+                    st.session_state["mueen_invite_access"] = (
+                        response.session.access_token
+                    )
+                    st.session_state["mueen_invite_refresh"] = (
+                        response.session.refresh_token
+                    )
+                    st.session_state["mueen_invite_verified"] = True
+                    st.rerun()
+                except Exception:
+                    st.error("تعذر التحقق من الدعوة أو انتهت صلاحيتها.")
+            else:
+                st.info("افتح رابط الدعوة من بريدك الإلكتروني لإكمال التفعيل.")
+
+        else:
+            with st.form("mueen_activate_teacher"):
+                new_password = st.text_input(
+                    "كلمة المرور الجديدة",
+                    type="password",
+                )
+                confirm_password = st.text_input(
+                    "تأكيد كلمة المرور",
+                    type="password",
+                )
+                activate = st.form_submit_button(
+                    "تفعيل الحساب",
+                    use_container_width=True,
+                )
+
+            if activate:
+                if len(new_password) < 12:
+                    st.warning("كلمة المرور يجب ألا تقل عن 12 حرفًا.")
+                elif new_password != confirm_password:
+                    st.warning("كلمتا المرور غير متطابقتين.")
+                else:
+                    try:
+                        auth_client.auth.set_session(
+                            st.session_state["mueen_invite_access"],
+                            st.session_state["mueen_invite_refresh"],
+                        )
+
+                        updated = auth_client.auth.update_user({
+                            "password": new_password
+                        })
+                        if not updated.user:
+                            raise ValueError("Password update failed")
+
+                        auth_client.auth.sign_out()
+
+                        for key in (
+                            "mueen_invite_access",
+                            "mueen_invite_refresh",
+                            "mueen_invite_verified",
+                        ):
+                            st.session_state.pop(key, None)
+
+                        st.query_params.clear()
+                        st.session_state["mueen_activation_success"] = True
+                        st.rerun()
+
+                    except Exception:
+                        st.error(
+                            "تعذر إنشاء كلمة المرور. "
+                            "قد تكون جلسة الدعوة منتهية الصلاحية."
+                        )
+
         st.stop()
+    if st.session_state.pop("mueen_activation_success", False):
+        st.success(
+            "تم إنشاء كلمة المرور. يمكنك الآن تسجيل الدخول بحساب المعلم."
+        )
     with st.form("mueen_login_form"):
         email = st.text_input(
             "البريد الإلكتروني" if is_arabic else "Email address"
