@@ -1036,7 +1036,14 @@ if not st.session_state.get("mueen_access_token"):
             else "Supabase could not be initialized. Check your Streamlit Secrets."
         )
         st.stop()
-
+    # مسار تفعيل حساب المعلم
+    if st.query_params.get("activation") == "teacher":
+        st.info(
+            "مرحبًا بك في مُعين AI. "
+            "تم فتح مسار تفعيل حساب المعلم، "
+            "وجارٍ استكمال آلية إنشاء كلمة المرور."
+        )
+        st.stop()
     with st.form("mueen_login_form"):
         email = st.text_input(
             "البريد الإلكتروني" if is_arabic else "Email address"
