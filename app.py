@@ -1063,12 +1063,19 @@ export default function(component) {
         invitation_type: type || "missing"
     });
 
-    if (access && refresh && type === "invite") {
-        setTriggerValue("tokens", {
-            access_token: access,
-            refresh_token: refresh
-        });
-    }
+   if (access && refresh && type === "invite") {
+    setTriggerValue("tokens", {
+        access_token: access,
+        refresh_token: refresh
+    });
+
+    // إزالة الرموز من شريط العنوان
+    window.history.replaceState(
+        null,
+        "",
+        window.location.pathname + window.location.search
+    );
+}
 }
                 """,
             )
