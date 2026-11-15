@@ -1045,32 +1045,32 @@ if not st.session_state.get("mueen_access_token"):
         if not st.session_state.get("mueen_invite_verified"):
             invite_receiver = st.components.v2.component(
                 "mueen_invite_receiver",
-                js="""
-                export default function(component) {
-                    const { setTriggerValue } = component;
-                    const params = new URLSearchParams(
-                        window.location.hash.slice(1)
-                    );
+                
+export default function(component) {
+    const { setTriggerValue } = component;
+    const params = new URLSearchParams(
+        window.location.hash.slice(1)
+    );
 
-                    const access = params.get("access_token");
-                    const refresh = params.get("refresh_token");
-                    const type = params.get("type");
+    const access = params.get("access_token");
+    const refresh = params.get("refresh_token");
+    const type = params.get("type");
 
-                    if (access && refresh && type === "invite") {
-                        // إزالة رموز الدخول من عنوان المتصفح فور قراءتها
-                        window.history.replaceState(
-                            null,
-                            "",
-                            window.location.pathname + window.location.search
-                        );
+    // إرسال حالة الفحص فقط، دون كشف أي رموز
+    setTriggerValue("status", {
+        has_access: Boolean(access),
+        has_refresh: Boolean(refresh),
+        invitation_type: type || "missing"
+    });
 
-                        setTriggerValue("tokens", {
-                            access_token: access,
-                            refresh_token: refresh
-                        });
-                    }
-                }
-                """,
+    if (access && refresh && type === "invite") {
+        setTriggerValue("tokens", {
+            access_token: access,
+            refresh_token: refresh
+        });
+    }
+}
+
             )
 
             result = invite_receiver(
@@ -1079,6 +1079,14 @@ if not st.session_state.get("mueen_access_token"):
             )
 
             tokens = result.tokens
+                        status = result.status
+            if status:
+                st.caption(
+                    "فحص رابط الدعوة: "
+                    f"Access={status.get('has_access')}, "
+                    f"Refresh={status.get('has_refresh')}, "
+                    f"Type={status.get('invitation_type')}"
+                )
             if tokens:
                 try:
                     response = auth_client.auth.set_session(
