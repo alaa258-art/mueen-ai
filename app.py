@@ -1090,7 +1090,7 @@ export default function(component) {
                     f"Type={status.get('invitation_type')}"
                 )
 
-                        status = result.status
+            status = result.status
             if status:
                 st.caption(
                     "فحص رابط الدعوة: "
