@@ -204,22 +204,75 @@ def clear_login():
 
 
 def get_supabase():
-    """إعادة إنشاء اتصال موثّق بجلسة المستخدم وتخزين أي رموز مجددة."""
-    try:
-        client = get_auth_client()
-        access_token = st.session_state.get("mueen_access_token")
-        refresh_token = st.session_state.get("mueen_refresh_token")
-        if client is None or not access_token or not refresh_token:
-            return None
+    
+def handle_teacher_invitation():
+    """تفعيل دعوة Supabase وتعيين كلمة مرور المعلم."""
+    params = st.query_params
+    token_hash = params.get("token_hash")
+    invitation_type = params.get("type")
 
-        client.auth.set_session(access_token, refresh_token)
-        session = client.auth.get_session()
-        if session:
-            st.session_state["mueen_access_token"] = session.access_token
-            st.session_state["mueen_refresh_token"] = session.refresh_token
-        return client
-    except Exception:
-        return None
+    if not token_hash or invitation_type != "invite":
+        return False
+
+    st.title("تفعيل حساب المعلم في مُعين AI")
+
+    client = get_auth_client()
+    if client is None:
+        st.error("تعذر الاتصال بخدمة المصادقة.")
+        st.stop()
+
+    with st.form("teacher_invitation_form"):
+        password = st.text_input(
+            "كلمة المرور الجديدة",
+            type="password"
+        )
+        confirm_password = st.text_input(
+            "تأكيد كلمة المرور",
+            type="password"
+        )
+        activate = st.form_submit_button(
+            "تفعيل الحساب",
+            use_container_width=True
+        )
+
+    if activate:
+        if len(password) < 12:
+            st.warning("يجب ألا تقل كلمة المرور عن 12 حرفًا.")
+        elif password != confirm_password:
+            st.warning("كلمتا المرور غير متطابقتين.")
+        else:
+            try:
+                result = client.auth.verify_otp({
+                    "token_hash": token_hash,
+                    "type": "invite"
+                })
+
+                if not result.session:
+                    st.error("رابط الدعوة غير صالح أو انتهت صلاحيته.")
+                    return True
+
+                client.auth.update_user({
+                    "password": password
+                })
+
+                st.session_state["mueen_access_token"] = (
+                    result.session.access_token
+                )
+                st.session_state["mueen_refresh_token"] = (
+                    result.session.refresh_token
+                )
+
+                st.query_params.clear()
+                st.success("تم تفعيل الحساب بنجاح.")
+                st.rerun()
+
+            except Exception:
+                st.error(
+                    "تعذر تفعيل الحساب. تحقق من صلاحية رابط الدعوة."
+                )
+
+    return True
+
 
 
 def get_current_user_id(client):
@@ -1036,7 +1089,9 @@ if not st.session_state.get("mueen_access_token"):
             else "Supabase could not be initialized. Check your Streamlit Secrets."
         )
         st.stop()
-
+# معالجة رابط دعوة المعلم قبل عرض تسجيل الدخول
+if handle_teacher_invitation():
+    st.stop()
     with st.form("mueen_login_form"):
         email = st.text_input(
             "البريد الإلكتروني" if is_arabic else "Email address"
