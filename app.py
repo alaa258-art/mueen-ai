@@ -204,7 +204,26 @@ def clear_login():
 
 
 def get_supabase():
-    
+    """إنشاء عميل موثّق بجلسة المستخدم الحالية."""
+    access = st.session_state.get("mueen_access_token")
+    refresh = st.session_state.get("mueen_refresh_token")
+    if not access or not refresh:
+        return None
+    client = get_auth_client()
+    if client is None:
+        return None
+    try:
+        response = client.auth.set_session(access, refresh)
+        session = getattr(response, "session", None)
+        if session is None:
+            return None
+        st.session_state["mueen_access_token"] = session.access_token
+        st.session_state["mueen_refresh_token"] = session.refresh_token
+        return client
+    except Exception:
+        return None
+
+
 def handle_teacher_invitation():
     """تفعيل دعوة Supabase وتعيين كلمة مرور المعلم."""
     params = st.query_params
@@ -1089,9 +1108,9 @@ if not st.session_state.get("mueen_access_token"):
             else "Supabase could not be initialized. Check your Streamlit Secrets."
         )
         st.stop()
-# معالجة رابط دعوة المعلم قبل عرض تسجيل الدخول
-if handle_teacher_invitation():
-    st.stop()
+    # معالجة رابط دعوة المعلم قبل عرض تسجيل الدخول
+    if handle_teacher_invitation():
+        st.stop()
     with st.form("mueen_login_form"):
         email = st.text_input(
             "البريد الإلكتروني" if is_arabic else "Email address"
