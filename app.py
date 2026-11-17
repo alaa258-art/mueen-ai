@@ -1175,20 +1175,18 @@ session_client = get_supabase()
 if session_client is None:
     clear_login()
     st.warning("انتهت جلسة الدخول أو تعذر التحقق منها. سجّل الدخول مجددًا.")
-    
-    
-    try:
-        current_user_id = get_current_user_id(session_client)
-        user_schools = get_user_schools(session_client, current_user_id)
+    st.stop()
 
-        st.info(f"🔍 عدد المدارس التي أعادها Supabase: {len(user_schools)}")
-        st.write("المدارس المسترجعة:", [s["name"] for s in user_schools])
+# يجب تحميل المدارس بعد نجاح التحقق من الجلسة، لا داخل شرط فشلها.
+try:
+    current_user_id = get_current_user_id(session_client)
+    user_schools = get_user_schools(session_client, current_user_id)
+except Exception:
+    st.error("تعذر تحميل المدارس المرتبطة بحسابك. راجع سجل التطبيق لمعرفة السبب.")
+    st.stop()
 
-    except Exception as e:
-        st.error(f"تعذر تحميل المدارس: {e}")
-        st.stop()
-
-
+# فحص مؤقت للعدد فقط، دون عرض هوية المستخدم أو رموز الجلسة.
+st.info(f"🔍 عدد المدارس المتاحة لحسابك: {len(user_schools)}")
 
 if not user_schools:
     st.error("لا توجد مدرسة مرتبطة بحسابك بعضوية نشطة. اطلب من مسؤول النظام إضافتك إلى المدرسة.")
