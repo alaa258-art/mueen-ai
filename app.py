@@ -1186,7 +1186,7 @@ except Exception:
     st.stop()
 
 # فحص مؤقت للعدد فقط، دون عرض هوية المستخدم أو رموز الجلسة.
-st.info(f"🔍 عدد المدارس المتاحة لحسابك: {len(user_schools)}")
+
 
 if not user_schools:
     st.error("لا توجد مدرسة مرتبطة بحسابك بعضوية نشطة. اطلب من مسؤول النظام إضافتك إلى المدرسة.")
@@ -1245,7 +1245,8 @@ st.session_state["mueen_school_id"] = selected_school["id"]
 st.session_state["mueen_school_role"] = selected_school["role"]
 # V6.3 — principal-only teacher management (server-side authorization in Edge Function)
 from mueen_teacher_admin import render_teacher_admin
-render_teacher_admin(selected_school["id"], selected_school["role"])
+# تُعرض إدارة العضويات داخل صفحة إدارة المدرسة فقط، حسب دور المستخدم.
+
 # MUEEN AI — تنسيق مساحة العمل فقط، بعد نجاح تسجيل الدخول
 st.markdown("""
 <style>
@@ -1358,67 +1359,70 @@ div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_6 button {
 """, unsafe_allow_html=True)
 
 st.session_state.setdefault("mueen_active_page", 0)
+current_role = str(st.session_state.get("mueen_school_role", "")).lower()
+current_school_name = str(selected_school.get("name", ""))
+can_manage_school = current_role in ("principal", "coordinator")
+# أدوات التطوير لا تظهر إلا للمدير في مدرسة اختبار منفصلة.
+can_use_developer_tools = current_role == "principal" and current_school_name.startswith("MUEEN_TEST_")
 nav_items = [
-    ("🏠 الرئيسية", 0), ("📊 لوحة القيادة", 1),
-    ("📈 التحسن والمهارات", 2), ("🧠 التحليل الذكي", 3),
-    ("📄 التقرير التنفيذي", 4), ("📚 الخطط والاختبارات", 5),
-    ("🏫 إدارة المدرسة", 6),
+    ("🏠 الرئيسية", 0),
+    ("📊 لوحة القيادة", 1),
+    ("📈 التحسن والمهارات", 2),
+    ("🧠 التحليل الذكي", 3),
+    ("📄 التقرير التنفيذي", 4),
+    ("📚 الخطط والتدخلات", 5),
 ]
-# V6: البطاقات الكبيرة للرئيسية فقط، والتنقل المختصر للصفحات الداخلية.
+if can_manage_school:
+    nav_items.append(("🏫 إدارة المدرسة", 6))
+if can_use_developer_tools:
+    nav_items.append(("🧪 أدوات التطوير", 7))
+allowed_pages = {number for _, number in nav_items}
+if st.session_state["mueen_active_page"] not in allowed_pages:
+    st.session_state["mueen_active_page"] = 0
 active_page = st.session_state["mueen_active_page"]
+nav_labels = dict((number, label) for label, number in nav_items)
+
 if active_page == 0:
-    st.markdown("""<div class="mueen-v5-title"><h2>✨ مساحة عمل مُعين</h2>
-    <p>اختر القسم من البطاقات الملونة للانتقال مباشرة إلى أدواته.</p></div>""",
-    unsafe_allow_html=True)
-    for row_items in (nav_items[:3], nav_items[3:6], nav_items[6:]):
+    st.markdown("### 🏠 مساحة عمل مُعين")
+    st.caption("اختر المهمة التي تريد إنجازها. ستظهر لك الوظائف المتاحة وفق صلاحياتك.")
+    for start_index in range(0, len(nav_items), 3):
+        row_items = nav_items[start_index:start_index + 3]
         cols = st.columns(3)
         for col, (label, number) in zip(cols, row_items):
             with col:
                 if st.button(label, key=f"mueen_nav_{number}", use_container_width=True):
                     st.session_state["mueen_active_page"] = number
                     st.rerun()
-    st.caption("🏠 الصفحة الرئيسية · اختر بطاقة للانتقال إلى القسم المطلوب")
 else:
     st.markdown("""
     <style>
-    /* أزرار التنقل المختصرة، دون تغيير ألوان البطاقات الرئيسية */
     [class*="st-key-mueen_quick_"] button {
-        min-height: 56px !important;
-        padding: 9px 12px !important;
-        font-size: 15px !important;
-        font-weight: 700 !important;
-        border: 1px solid #CBD5E1 !important;
-        border-radius: 9px !important;
-        background: #FFFFFF !important;
-        color: #10243A !important;
-        white-space: normal !important;
-    }
-    [class*="st-key-mueen_quick_"] button[kind="primary"] {
-        background: #087E8B !important;
-        border-color: #087E8B !important;
-        color: white !important;
-    }
-    [class*="st-key-mueen_quick_"] button:hover {
-        border-color: #087E8B !important;
-        color: #087E8B !important;
-        background: #EDF8F8 !important;
+        min-height: 42px !important; padding: 6px 10px !important;
+        font-size: 13px !important; font-weight: 600 !important;
+        border-radius: 8px !important; white-space: normal !important;
     }
     </style>
     """, unsafe_allow_html=True)
-    # صفان بأسماء كاملة بدل سبعة أزرار ضيقة
-    for nav_row in (nav_items[:4], nav_items[4:]):
-        cols = st.columns(len(nav_row), gap="small")
-        for col, (label, number) in zip(cols, nav_row):
+    # شريط تنقل مختصر ثابت بدلاً من بطاقات كبيرة على كل صفحة.
+    for start_index in range(0, len(nav_items), 4):
+        row_items = nav_items[start_index:start_index + 4]
+        cols = st.columns(len(row_items), gap="small")
+        for col, (label, number) in zip(cols, row_items):
             with col:
-                if st.button(
-                    label,
-                    key=f"mueen_quick_{number}",
-                    use_container_width=True,
-                    type="primary" if number == active_page else "secondary",
-                ):
+                if st.button(label, key=f"mueen_quick_{number}",
+                             use_container_width=True,
+                             type="primary" if number == active_page else "secondary"):
                     st.session_state["mueen_active_page"] = number
                     st.rerun()
-    st.caption("القسم الحالي: " + nav_items[active_page][0])
+    st.caption("القسم الحالي: " + nav_labels[active_page])
+
+# وظائف إدارة المعلمين لا تظهر أعلى كل صفحة.
+if active_page == 6 and can_manage_school:
+    st.markdown("### 🏫 إدارة المدرسة")
+    if current_role == "principal":
+        render_teacher_admin(selected_school["id"], selected_school["role"])
+    else:
+        st.caption("إدارة عضويات المستخدمين متاحة لمدير المدرسة فقط.")
 
 # School agent: persistent, authenticated and human-reviewed.
 from mueen_school_agent import render_school_agent
@@ -1436,7 +1440,7 @@ with mueen_page(0):
     st.info("مرحبًا بك في مُعين. اختر إحدى البطاقات الملونة أعلاه لفتح القسم المطلوب.")
 
 
-with mueen_page(6):
+with mueen_page(5):
     st.markdown("## 🧭 V5.5 — دورة التدخل العلاجي الموثقة")
     st.warning("البيانات السابقة تجريبية. لا تُفسّر النتائج الافتراضية على أنها أثر تعليمي حقيقي.")
     st.caption("يتطلب تشغيل MUEEN_V5_5_Migration.sql في Supabase أولًا. لا يحذف التحديث أي بيانات.")
@@ -1890,7 +1894,7 @@ with mueen_page(6):
     except Exception as exc:
         st.error("تعذر تشغيل V6.0. نفذ ترحيل قاعدة البيانات أولًا: "+str(exc)[:350])
 
-with mueen_page(6):
+with mueen_page(7 if can_use_developer_tools else -1):
     st.markdown("## 🎓 V5.3 — اختبار التجربة التعليمية المتكاملة")
     st.info("اختبار تقني متكامل ببيانات افتراضية: يولد خطة واختبارًا عبر OpenAI، ويحفظ التقييمين والخطة والمتابعة في Supabase، ثم يتحقق من استرجاعها.")
     st.warning("لا يثبت أثرًا تعليميًا فعليًا، ولا يمثل اعتمادًا بشريًا للخطة أو تنفيذًا حقيقيًا للنشاط. سجلات الاختبار لا تُحذف تلقائيًا.")
@@ -1923,7 +1927,7 @@ with mueen_page(6):
                        ensure_ascii=False, indent=2).encode("utf-8"),
             "MUEEN_V5_3_Pilot_Report.json", "application/json", key="v53_json")
 
-with mueen_page(6):
+with mueen_page(7 if can_use_developer_tools else -1):
     st.markdown("### 🧪 اختبار التكامل الشامل — V5.1")
     st.caption("فحص قراءة آمن على المدرسة المختارة؛ لا يُنشئ ولا يحذف أي سجل، ولا يرسل بيانات الطلاب إلى الذكاء الاصطناعي.")
     if st.button("🧪 تشغيل فحص التكامل الشامل", key="mueen_v51_run_audit", use_container_width=True):
@@ -1944,7 +1948,7 @@ with mueen_page(6):
             key="mueen_v51_audit_download")
         st.warning("هذا الفحص لا يثبت نجاح INSERT أو DELETE أو عزل RLS بين حسابين. لا تستخدم نتائج الاختبار دليلًا على نجاح الحفظ الفعلي.")
 
-with mueen_page(6):
+with mueen_page(7 if can_use_developer_tools else -1):
 
     st.markdown("### 🔐 V5.2 — اختبار الحفظ والاسترجاع الفعلي")
     st.caption("يُنشئ خطة ومتابعة تقنيتين دون ربطهما بأي طالب. متاح فقط داخل مدرسة اختبار يبدأ اسمها بـ MUEEN_TEST_.")
@@ -1962,6 +1966,7 @@ with mueen_page(6):
     st.markdown("### 🛡️ اختبار عزل المدارس")
     st.info("اختبار عزل مدرستين لا يُعد مكتملًا دون حساب ثانٍ لا يملك عضوية في المدرسة المستهدفة. لا يثبت هذا الزر العزل عبر حساب واحد.")
 
+with mueen_page(6):
     # =========================================================
     # إدارة الهيكل الأكاديمي - MUEEN AI
     # =========================================================
