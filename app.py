@@ -1106,9 +1106,10 @@ if not st.session_state.get("mueen_access_token"):
             else "Supabase could not be initialized. Check your Streamlit Secrets."
         )
         st.stop()
-# معالجة رابط دعوة المعلم قبل عرض تسجيل الدخول
-if handle_teacher_invitation():
-    st.stop()
+    # معالجة رابط دعوة المعلم قبل عرض تسجيل الدخول
+    if handle_teacher_invitation():
+        st.stop()
+
     with st.form("mueen_login_form"):
         email = st.text_input(
             "البريد الإلكتروني" if is_arabic else "Email address"
