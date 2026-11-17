@@ -204,6 +204,23 @@ def clear_login():
 
 
 def get_supabase():
+    """إرجاع عميل Supabase موثق بجلسة المستخدم الحالية."""
+    token = st.session_state.get("mueen_access_token")
+    refresh_token = st.session_state.get("mueen_refresh_token")
+
+    if not token or not refresh_token:
+        return None
+
+    client = get_auth_client()
+    if client is None:
+        return None
+
+    try:
+        client.auth.set_session(token, refresh_token)
+        return client
+    except Exception:
+        return None
+
     
 def handle_teacher_invitation():
     """تفعيل دعوة Supabase وتعيين كلمة مرور المعلم."""
