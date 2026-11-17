@@ -1176,6 +1176,7 @@ if session_client is None:
     clear_login()
     st.warning("انتهت جلسة الدخول أو تعذر التحقق منها. سجّل الدخول مجددًا.")
     
+    
     try:
         current_user_id = get_current_user_id(session_client)
         user_schools = get_user_schools(session_client, current_user_id)
@@ -1187,7 +1188,6 @@ if session_client is None:
         st.error(f"تعذر تحميل المدارس: {e}")
         st.stop()
 
-    st.stop()
 
 
 if not user_schools:
