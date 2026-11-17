@@ -203,23 +203,25 @@ def clear_login():
         st.session_state.pop(key, None)
 
 
+
 def get_supabase():
-    """إرجاع عميل Supabase موثق بجلسة المستخدم الحالية."""
-    token = st.session_state.get("mueen_access_token")
-    refresh_token = st.session_state.get("mueen_refresh_token")
-
-    if not token or not refresh_token:
-        return None
-
-    client = get_auth_client()
-    if client is None:
-        return None
-
+    """إعادة إنشاء اتصال موثّق بجلسة المستخدم وتخزين أي رموز مجددة."""
     try:
-        client.auth.set_session(token, refresh_token)
+        client = get_auth_client()
+        access_token = st.session_state.get("mueen_access_token")
+        refresh_token = st.session_state.get("mueen_refresh_token")
+        if client is None or not access_token or not refresh_token:
+            return None
+
+        client.auth.set_session(access_token, refresh_token)
+        session = client.auth.get_session()
+        if session:
+            st.session_state["mueen_access_token"] = session.access_token
+            st.session_state["mueen_refresh_token"] = session.refresh_token
         return client
     except Exception:
         return None
+
 
     
 def handle_teacher_invitation():
