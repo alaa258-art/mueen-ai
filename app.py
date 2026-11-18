@@ -1202,29 +1202,15 @@ export default function(component) {
                     st.session_state["mueen_refresh_token"] = (
                         result.session.refresh_token
                     )
-                    st.rerun()
-                else:
-                    st.error(
-                        "لم يتم إنشاء جلسة تسجيل دخول."
-                        if is_arabic
-                        else "A sign-in session could not be created."
-                    )
-
-            except Exception:
-                st.error(
-                    "تعذر تسجيل الدخول. تحقق من بيانات الحساب وحالة الحساب."
-                    if is_arabic
-                    else "Sign-in failed. Check your credentials and account status."
-                )
-
-    st.markdown("---")
-    st.caption(
-        "منصة مُعين للتعلم الذكي | نسخة تجريبية للمعلمين"
+                  except Exception as exc:
+    st.error(
+        "تعذر تسجيل الدخول. تحقق من بيانات الحساب وحالة الحساب."
         if is_arabic
-        else "MUEEN AI Learning Platform | Teacher Trial Version"
+        else "Sign-in failed. Check your credentials and account status."
     )
-
-    st.stop()
+    st.caption(
+        f"نوع الخطأ للتشخيص: {type(exc).__name__}"
+    )
 
 # تحقق من الجلسة قبل عرض أي بيانات
 session_client = get_supabase()
