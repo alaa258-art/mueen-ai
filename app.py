@@ -1183,43 +1183,51 @@ export default function(component) {
 
     if submitted:
         
-if not email.strip() or not password:
-    st.warning(
-        "يرجى إدخال البريد الإلكتروني وكلمة المرور."
-        if is_arabic
-        else "Please enter your email address and password."
-    )
-else:
-    try:
-        result = auth_client.auth.sign_in_with_password({
-            "email": email.strip(),
-            "password": password,
-        })
-
-        if result.session:
-            st.session_state["mueen_access_token"] = (
-                result.session.access_token
-            )
-            st.session_state["mueen_refresh_token"] = (
-                result.session.refresh_token
-            )
-            st.rerun()
-        else:
-            st.error(
-                "لم يتم إنشاء جلسة تسجيل دخول."
+        if not email.strip() or not password:
+            st.warning(
+                "يرجى إدخال البريد الإلكتروني وكلمة المرور."
                 if is_arabic
-                else "A sign-in session could not be created."
+                else "Please enter your email address and password."
             )
+        else:
+            try:
+                result = auth_client.auth.sign_in_with_password({
+                    "email": email.strip(),
+                    "password": password,
+                })
 
-    except Exception as exc:
-        st.error(
-            "تعذر تسجيل الدخول. تحقق من بيانات الحساب وحالة الحساب."
-            if is_arabic
-            else "Sign-in failed. Check your credentials and account status."
-        )
-        st.caption(
-            f"نوع الخطأ للتشخيص: {type(exc).__name__}"
-        )
+                if result.session:
+                    st.session_state["mueen_access_token"] = (
+                        result.session.access_token
+                    )
+                    st.session_state["mueen_refresh_token"] = (
+                        result.session.refresh_token
+                    )
+                    st.rerun()
+                else:
+                    st.error(
+                        "لم يتم إنشاء جلسة تسجيل دخول."
+                        if is_arabic
+                        else "A sign-in session could not be created."
+                    )
+
+            except Exception as exc:
+                st.error(
+                    "تعذر تسجيل الدخول. تحقق من بيانات الحساب وحالة الحساب."
+                    if is_arabic
+                    else "Sign-in failed. Check your credentials and account status."
+                )
+                st.caption(
+                    f"نوع الخطأ للتشخيص: {type(exc).__name__}"
+                )
+
+    st.markdown("---")
+    st.caption(
+        "منصة مُعين للتعلم الذكي | نسخة تجريبية للمعلمين"
+        if is_arabic
+        else "MUEEN AI Learning Platform | Teacher Trial Version"
+    )
+    st.stop()
 
 # تحقق من الجلسة قبل عرض أي بيانات
 session_client = get_supabase()
