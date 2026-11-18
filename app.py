@@ -1164,6 +1164,101 @@ export default function(component) {
                         )
 
         st.stop()
+    # استعادة كلمة المرور: تعمل في نسخة الاختبار فقط، ولا تتطلب تسجيل دخول مسبقًا.
+    if st.query_params.get("recovery") == "1":
+        st.subheader("🔑 إعادة تعيين كلمة المرور" if is_arabic else "🔑 Reset password")
+        st.caption(
+            "افتح رابط الاستعادة الذي وصلك عبر البريد الإلكتروني لإكمال العملية."
+            if is_arabic else "Open the recovery link from your email to continue."
+        )
+        if not st.session_state.get("mueen_recovery_verified"):
+            # روابط Supabase الافتراضية تحتوي على رموز الجلسة في جزء # من الرابط.
+            recovery_receiver = st.components.v2.component(
+                "mueen_recovery_receiver",
+                js="""
+export default function(component) {
+    const { setTriggerValue } = component;
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const access = params.get("access_token");
+    const refresh = params.get("refresh_token");
+    const type = params.get("type");
+    if (access && refresh && type === "recovery") {
+        setTriggerValue("tokens", {access_token: access, refresh_token: refresh});
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+}
+""",
+            )
+            received = recovery_receiver(
+                key="mueen_recovery_component",
+                on_tokens_change=lambda: None,
+            )
+            recovery_tokens = received.tokens
+            if recovery_tokens:
+                try:
+                    recovery_session = auth_client.auth.set_session(
+                        recovery_tokens["access_token"], recovery_tokens["refresh_token"]
+                    )
+                    if not recovery_session.session:
+                        raise ValueError("Recovery session unavailable")
+                    st.session_state["mueen_recovery_access"] = recovery_session.session.access_token
+                    st.session_state["mueen_recovery_refresh"] = recovery_session.session.refresh_token
+                    st.session_state["mueen_recovery_verified"] = True
+                    st.rerun()
+                except Exception:
+                    st.error("رابط الاستعادة غير صالح أو انتهت صلاحيته." if is_arabic else "Recovery link is invalid or expired.")
+            else:
+                st.info("إذا فتحت الصفحة دون رابط الاستعادة، اطلب رابطًا جديدًا من شاشة الدخول." if is_arabic else "Request a new link from the sign-in page.")
+        else:
+            with st.form("mueen_recovery_password_form"):
+                new_password = st.text_input("كلمة المرور الجديدة" if is_arabic else "New password", type="password")
+                confirm_password = st.text_input("تأكيد كلمة المرور" if is_arabic else "Confirm password", type="password")
+                change_password = st.form_submit_button("حفظ كلمة المرور" if is_arabic else "Save password", use_container_width=True)
+            if change_password:
+                if len(new_password) < 12:
+                    st.warning("يجب ألا تقل كلمة المرور عن 12 حرفًا." if is_arabic else "Use at least 12 characters.")
+                elif new_password != confirm_password:
+                    st.warning("كلمتا المرور غير متطابقتين." if is_arabic else "Passwords do not match.")
+                else:
+                    try:
+                        auth_client.auth.set_session(
+                            st.session_state["mueen_recovery_access"],
+                            st.session_state["mueen_recovery_refresh"],
+                        )
+                        updated = auth_client.auth.update_user({"password": new_password})
+                        if not updated.user:
+                            raise ValueError("Password update failed")
+                        auth_client.auth.sign_out()
+                        for key in ("mueen_recovery_access", "mueen_recovery_refresh", "mueen_recovery_verified"):
+                            st.session_state.pop(key, None)
+                        st.query_params.clear()
+                        st.session_state["mueen_recovery_success"] = True
+                        st.rerun()
+                    except Exception:
+                        st.error("تعذر تحديث كلمة المرور. اطلب رابط استعادة جديدًا." if is_arabic else "Could not update password. Request a new recovery link.")
+        st.stop()
+
+    if st.session_state.pop("mueen_recovery_success", False):
+        st.success("تم تحديث كلمة المرور. يمكنك تسجيل الدخول الآن." if is_arabic else "Password updated. You can now sign in.")
+
+    with st.expander("🔑 نسيت كلمة المرور؟" if is_arabic else "🔑 Forgot password?"):
+        with st.form("mueen_forgot_password_form"):
+            recovery_email = st.text_input("البريد الإلكتروني للحساب" if is_arabic else "Account email address", key="mueen_recovery_email")
+            request_recovery = st.form_submit_button("إرسال رابط الاستعادة" if is_arabic else "Send recovery link")
+        if request_recovery:
+            if not recovery_email.strip() or "@" not in recovery_email:
+                st.warning("أدخل بريدًا إلكترونيًا صحيحًا." if is_arabic else "Enter a valid email address.")
+            else:
+                try:
+                    # يجب إدراج هذا العنوان ضمن Redirect URLs في Supabase Auth.
+                    auth_client.auth.reset_password_email(
+                        recovery_email.strip(),
+                        {"redirect_to": "https://mueen-ai-professional-test.streamlit.app/?recovery=1"},
+                    )
+                    st.success("إذا كان البريد مرتبطًا بحساب، فستصلك رسالة الاستعادة. تحقق أيضًا من البريد غير المرغوب فيه." if is_arabic else "If the account exists, a recovery email will be sent. Check spam too.")
+                except Exception:
+                    st.error("تعذر إرسال رابط الاستعادة حاليًا. حاول لاحقًا أو تواصل مع المسؤول." if is_arabic else "Could not send the recovery link. Try later or contact an administrator.")
+
     if st.session_state.pop("mueen_activation_success", False):
         st.success(
             "تم إنشاء كلمة المرور. يمكنك الآن تسجيل الدخول بحساب المعلم."
