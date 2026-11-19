@@ -1589,475 +1589,9 @@ if active_page == 6 and can_manage_school:
     else:
         st.info("إدارة دعوات المعلمين والعضويات متاحة لمدير المدرسة فقط.")
 
-# School agent: persistent, authenticated and human-reviewed.
-from mueen_school_agent import render_school_agent
-if st.session_state.get("mueen_active_page") == 5:
-    with st.expander("🏫 مُعين للمدارس — حفظ وذاكرة واعتماد المعلم", expanded=True):
-        render_school_agent(get_supabase, get_selected_school_id, get_current_user_id)
-
-# V6.2 school pilot: subject-neutral, read-only teacher workflow.
-from mueen_school_pilot import render_school_pilot
-if st.session_state.get("mueen_active_page") == 5:
-    with st.expander("🏫 تجربة المعلم لأي مادة — تحليل وتدخل تكيفي (قراءة فقط)", expanded=True):
-        render_school_pilot()
-
 with mueen_page(0):
     st.info("مرحبًا بك في مُعين. اختر إحدى البطاقات الملونة أعلاه لفتح القسم المطلوب.")
 
-
-with mueen_page(5):
-    st.markdown("## 🧭 V5.5 — دورة التدخل العلاجي الموثقة")
-    st.warning("البيانات السابقة تجريبية. لا تُفسّر النتائج الافتراضية على أنها أثر تعليمي حقيقي.")
-    st.caption("يتطلب تشغيل MUEEN_V5_5_Migration.sql في Supabase أولًا. لا يحذف التحديث أي بيانات.")
-    try:
-        v55_client = get_supabase()
-        v55_school = str(get_selected_school_id())
-        v55_uid = get_current_user_id(v55_client)
-        v55_role = str(st.session_state.get("mueen_school_role", "")).lower()
-        v55_manage = v55_role in ("principal", "coordinator")
-        v55_drafts = (v55_client.table("mueen_workflow_drafts").select("*")
-            .eq("school_id", v55_school).order("created_at",desc=True).limit(200).execute().data or [])
-        st.caption("معرف المدرسة المختارة: " + v55_school)
-    except Exception as e:
-        st.error("تعذر قراءة بيانات V5.5. نفّذ ملف SQL وتحقق من المدرسة: " + str(e)[:300])
-        v55_drafts = None
-    if v55_drafts is not None:
-        with st.expander("① إدخال تقييم وتحديد المحاولة صراحة",expanded=True):
-            v55_code = st.text_input("رمز الطالب",value="PILOT-MATH-01",key="v55_code")
-            v55_skill = st.text_input("المهارة",value="ترتيب خطوات الحل",key="v55_skill")
-            v55_subject = st.text_input("المادة",value="الرياضيات",key="v55_subject")
-            v55_grade = st.text_input("الصف",value="السابع",key="v55_grade")
-            v55_kind = st.radio("نوع التقييم",["قبلي","بعدي"],horizontal=True,key="v55_kind")
-            col_a,col_b = st.columns(2)
-            v55_score = col_a.number_input("الدرجة",min_value=0.0,value=8.0,key="v55_score")
-            v55_max = col_b.number_input("الدرجة الكلية",min_value=0.1,value=20.0,key="v55_max")
-            st.info("المحاولات المتعددة مسموحة. اختر المحاولة المطلوبة بالمعرف عند ربطها بالخطة؛ لا تعتمد أعلى درجة تلقائيًا.")
-            if st.button("💾 تسجيل محاولة تقييم جديدة",key="v55_save_assessment"):
-                try:
-                    if not v55_code.strip() or not v55_skill.strip() or v55_score>v55_max:
-                        raise ValueError("تحقق من الرمز والمهارة والدرجات")
-                    typ = "baseline" if v55_kind=="قبلي" else "follow_up"
-                    previous = (v55_client.table("assessment_records").select("id,score,max_score,created_at")
-                        .eq("school_id",v55_school).eq("student_code",v55_code.strip())
-                        .eq("skill",v55_skill.strip()).eq("assessment_type",typ)
-                        .order("created_at",desc=True).limit(1).execute().data or [])
-                    if previous and float(previous[0]["score"])==float(v55_score) and float(previous[0]["max_score"])==float(v55_max):
-                        st.warning("يوجد تقييم حديث بنفس الدرجة. تحقق من المحاولات أدناه قبل إنشاء نسخة أخرى.")
-                    else:
-                        save_assessment_records([{"student_code":v55_code.strip(),"skill":v55_skill.strip(),
-                            "assessment_type":typ,"score":v55_score,"max_score":v55_max}])
-                        st.success("تم حفظ محاولة جديدة. حدّث الصفحة لعرض معرفها.")
-                except Exception as e:st.error("تعذر الحفظ: "+str(e)[:350])
-            v55_assessments=(v55_client.table("assessment_records").select("id,student_code,skill,assessment_type,score,max_score,created_at")
-                .eq("school_id",v55_school).eq("student_code",v55_code.strip()).eq("skill",v55_skill.strip())
-                .order("created_at",desc=True).limit(100).execute().data or []) if v55_code.strip() and v55_skill.strip() else []
-            st.dataframe(pd.DataFrame(v55_assessments),use_container_width=True,hide_index=True)
-        with st.expander("② إنشاء مقترح مرتبط بتقييم قبلي محدد",expanded=True):
-            baselines=[r for r in v55_assessments if r["assessment_type"]=="baseline"]
-            if not baselines:st.info("سجّل تقييمًا قبليًا أولًا.")
-            else:
-                v55_base_id=st.selectbox("اختر محاولة التقييم القبلي (المعرف والتاريخ والدرجة)",
-                    [str(r["id"]) for r in baselines],format_func=lambda x:next(
-                    (f'{r["created_at"]} | {r["score"]}/{r["max_score"]} | {x[:8]}' for r in baselines if str(r["id"])==x),x),key="v55_baseline_id")
-                v55_threshold=st.number_input("حد الإتقان %",min_value=1,max_value=100,value=80,key="v55_threshold")
-                v55_notes=st.text_area("ملاحظات المعلم",key="v55_notes")
-                v55_demo=st.checkbox("هذه بيانات تجريبية/محاكاة وليست نتائج حقيقية",value=True,key="v55_demo")
-                if st.button("🤖 توليد الخطة والاختبار",key="v55_generate"):
-                    try:
-                        br=next(r for r in baselines if str(r["id"])==v55_base_id)
-                        pct=100*float(br["score"])/float(br["max_score"])
-                        plan=create_plan("gpt-4.1-mini",v55_subject,v55_grade,v55_skill,pct,"العربية",v55_notes,"طالب مجهول",v55_threshold)
-                        quiz=create_quiz("gpt-4.1-mini",v55_subject,v55_grade,v55_skill,"العربية")
-                        if len(str(plan).strip())<100 or len(str(quiz).strip())<40:raise ValueError("المخرجات غير مكتملة")
-                        st.session_state["v55_generated"]={"school":v55_school,"code":v55_code.strip(),"skill":v55_skill.strip(),
-                            "subject":v55_subject,"grade":v55_grade,"baseline_id":v55_base_id,"before":pct,
-                            "threshold":v55_threshold,"plan":plan,"quiz":quiz,"demo":v55_demo}
-                        st.success("تم التوليد؛ راجع المخرجات ثم أرسل المقترح.")
-                    except Exception as e:st.error("فشل التوليد: "+str(e)[:350])
-                gen=st.session_state.get("v55_generated",{})
-                if gen.get("school")==v55_school:
-                    st.write("**الخطة:**");st.write(gen["plan"])
-                    st.write("**الاختبار:**");st.write(gen["quiz"])
-                    v55_review=st.checkbox("راجعت المقترح وأوافق على إرساله للمدير",key="v55_review")
-                    if st.button("📨 إرسال المقترح",disabled=not v55_review,key="v55_submit"):
-                        try:
-                            payload={"school_id":v55_school,"created_by":v55_uid,"student_code":gen["code"],
-                                "skill":gen["skill"],"subject":gen["subject"],"grade":gen["grade"],
-                                "baseline_pct":gen["before"],"threshold_pct":gen["threshold"],
-                                "plan_text":gen["plan"],"quiz_text":gen["quiz"],"status":"pending",
-                                "baseline_assessment_id":int(gen["baseline_id"]),"is_demo":gen["demo"]}
-                            dup=[d for d in v55_drafts if d.get("created_by")==v55_uid and d.get("student_code")==gen["code"]
-                                 and d.get("skill")==gen["skill"] and d.get("status")=="pending"]
-                            if dup:raise ValueError("لديك مقترح معلّق للمهارة نفسها. راجعه قبل إرسال مقترح آخر.")
-                            v55_client.table("mueen_workflow_drafts").insert(payload).execute()
-                            st.session_state.pop("v55_generated",None)
-                            st.success("أُرسل المقترح. حدّث الصفحة ليظهر في حساب المدير.")
-                        except Exception as e:st.error("تعذر الإرسال: "+str(e)[:350])
-        with st.expander("③ اعتماد المدير — معاملة ذرّية تمنع التكرار",expanded=v55_manage):
-            pending=[d for d in v55_drafts if d.get("status")=="pending"]
-            if not v55_manage:st.info("الاعتماد للمدير أو المنسق فقط.")
-            elif not pending:st.info("لا توجد مقترحات معلقة.")
-            else:
-                draft_id=st.selectbox("اختر المقترح",[str(d["id"]) for d in pending],key="v55_approve_id")
-                d=next(d for d in pending if str(d["id"])==draft_id)
-                st.caption("بيانات تجريبية" if d.get("is_demo",True) else "بيانات تشغيلية — يلزم تحقق بشري")
-                st.write(d["quiz_text"])
-                approved_text=st.text_area("الخطة بعد المراجعة",value=d["plan_text"],height=180,key="v55_approved_text")
-                manager_ok=st.checkbox("راجعت الخطة والاختبار وأوافق على الاعتماد",key="v55_manager_ok")
-                if st.button("✅ اعتماد الخطة مرة واحدة",disabled=not manager_ok,key="v55_approve"):
-                    try:
-                        result=v55_client.rpc("mueen_v55_approve",{"p_draft_id":draft_id,"p_reviewed_plan":approved_text}).execute().data
-                        st.success("الخطة معتمدة، معرّفها: "+str(result)+". العملية آمنة عند تكرار الضغط.")
-                    except Exception as e:st.error("تعذر الاعتماد: "+str(e)[:350])
-        with st.expander("④ ربط تقييم بعدي محدد وتوثيق المتابعة",expanded=True):
-            approved=[d for d in v55_drafts if d.get("status")=="approved" and d.get("intervention_plan_id")]
-            if not approved:st.info("لا توجد خطط معتمدة.")
-            else:
-                chosen=st.selectbox("اختر الخطة المعتمدة",[str(d["id"]) for d in approved],
-                    format_func=lambda x:next((f'{d["student_code"]} | {d["skill"]} | {x[:8]}' for d in approved if str(d["id"])==x),x),key="v55_follow_draft")
-                d=next(d for d in approved if str(d["id"])==chosen)
-                if d.get("followup_assessment_id"):
-                    st.success("تم ربط المتابعة بهذه الخطة. التقييم البعدي: "+str(d["followup_assessment_id"]))
-                else:
-                    posts=(v55_client.table("assessment_records").select("id,score,max_score,created_at")
-                        .eq("school_id",v55_school).eq("student_code",d["student_code"])
-                        .eq("skill",d["skill"]).eq("assessment_type","follow_up")
-                        .order("created_at",desc=True).limit(100).execute().data or [])
-                    if not posts:st.info("سجّل تقييمًا بعديًا من القسم ①.")
-                    else:
-                        post_id=st.selectbox("اختر المحاولة البعدية المقصودة (لا اختيار تلقائي لأعلى نتيجة)",
-                            [str(r["id"]) for r in posts],format_func=lambda x:next(
-                            (f'{r["created_at"]} | {r["score"]}/{r["max_score"]} | {x[:8]}' for r in posts if str(r["id"])==x),x),key="v55_post_id")
-                        activity=st.text_area("وصف النشاط المنفذ — في المحاكاة اذكر أنه افتراضي",key="v55_activity")
-                        notes=st.text_area("ملاحظات المتابعة",key="v55_follow_notes")
-                        if v55_manage and st.button("💾 ربط التقييم وحفظ المتابعة",key="v55_save_follow"):
-                            try:
-                                if not activity.strip():raise ValueError("اكتب وصف النشاط.")
-                                if d.get("is_demo",True) and not st.session_state.get("v55_confirm_demo",False):
-                                    raise ValueError("فعّل تأكيد المحاكاة قبل الحفظ.")
-                                res=v55_client.rpc("mueen_v55_record_followup",{
-                                    "p_draft_id":chosen,"p_assessment_id":int(post_id),
-                                    "p_activity":activity,"p_notes":notes}).execute().data
-                                st.success("حُفظت المتابعة وربطت بالمحاولة المختارة: "+str(res))
-                            except Exception as e:st.error("تعذر حفظ المتابعة: "+str(e)[:350])
-                        if d.get("is_demo",True):st.checkbox("أؤكد أن هذا النشاط والدرجات محاكاة وليست دليل تنفيذ فعلي",key="v55_confirm_demo")
-                        if not v55_manage:st.info("يحفظ المدير/المنسق المتابعة بعد اختيار المحاولة.")
-        with st.expander("⑤ تقرير الدورة مع تمييز البيانات التجريبية",expanded=True):
-            report=[]
-            for d in v55_drafts:
-                row={"معرف المقترح":d["id"],"المدرسة":v55_school,"رمز الطالب":d["student_code"],
-                    "المهارة":d["skill"],"نوع البيانات":"تجريبية" if d.get("is_demo",True) else "تشغيلية",
-                    "حالة الاعتماد":d["status"],"معرف الخطة":d.get("intervention_plan_id"),
-                    "معرف التقييم القبلي":d.get("baseline_assessment_id"),
-                    "القبلي %":d["baseline_pct"],"معرف التقييم البعدي":d.get("followup_assessment_id"),
-                    "البعدي %":None,"التغير (نقطة)":None,"القرار": "بانتظار تقييم بعدي مرتبط"}
-                if d.get("followup_assessment_id"):
-                    try:
-                        matched=(v55_client.table("assessment_records").select("id,score,max_score,school_id,student_code,skill,assessment_type")
-                            .eq("id",str(d["followup_assessment_id"])).eq("school_id",v55_school).limit(1).execute().data or [])
-                        if len(matched)==1 and matched[0]["student_code"]==d["student_code"] and matched[0]["skill"]==d["skill"] and matched[0]["assessment_type"]=="follow_up":
-                            pct=100*float(matched[0]["score"])/float(matched[0]["max_score"])
-                            row["البعدي %"]=round(pct,2)
-                            row["التغير (نقطة)"]=round(pct-float(d["baseline_pct"]),2)
-                            row["القرار"]=decide(float(d["baseline_pct"]),pct,float(d["threshold_pct"]))[0]
-                        else:row["القرار"]="تعارض في ربط التقييم البعدي"
-                    except Exception as e:row["القرار"]="تعذر التحقق: "+str(e)[:60]
-                report.append(row)
-            if report:
-                frame=pd.DataFrame(report)
-                st.dataframe(frame,use_container_width=True,hide_index=True)
-                st.download_button("📥 تنزيل تقرير V5.5 CSV",frame.to_csv(index=False).encode("utf-8-sig"),
-                    "MUEEN_V5_5_Workflow_Report.csv","text/csv",key="v55_download")
-            else:st.info("لا توجد مقترحات بعد.")
-
-    # V6.1: evidence-based second-cycle candidate (read-only until schema and RLS review).
-    def v61_candidate(previous, current, baseline, followup):
-        """Compute a second-cycle recommendation using actual linked assessments."""
-        if str(previous.get("source_draft_id")) == str(current.get("id")):
-            raise ValueError("لا يجوز إعادة استخدام مصدر الدورة السابقة.")
-        if previous.get("review_status") != "approved":
-            raise ValueError("يجب اعتماد الدورة السابقة بشريًا أولًا.")
-        if (str(previous.get("student_code")) != str(current.get("student_code"))
-                or str(previous.get("skill")) != str(current.get("skill"))):
-            raise ValueError("يجب تطابق رمز الطالب والمهارة بين الدورتين.")
-        if any(str(r.get("student_code")) != str(current.get("student_code"))
-               or str(r.get("skill")) != str(current.get("skill")) for r in (baseline, followup)):
-            raise ValueError("سجلات التقييم لا تطابق الطالب والمهارة.")
-        if baseline.get("assessment_type") != "baseline" or followup.get("assessment_type") != "follow_up":
-            raise ValueError("يجب وجود تقييم قبلي وتقييم بعدي مستقلين.")
-        if str(baseline.get("id")) == str(followup.get("id")):
-            raise ValueError("لا يجوز استخدام التقييم نفسه مرتين.")
-        for r in (baseline, followup):
-            score, maximum = float(r["score"]), float(r["max_score"])
-            if maximum <= 0 or not 0 <= score <= maximum:
-                raise ValueError("درجات التقييم غير صالحة.")
-        before = 100 * float(baseline["score"]) / float(baseline["max_score"])
-        after = 100 * float(followup["score"]) / float(followup["max_score"])
-        target = float(current.get("threshold_pct") or previous.get("threshold_pct") or 80)
-        delta = after - before
-        if after >= target:
-            strategy = "نشاط إثرائي وتقييم احتفاظ لاحق، بعد تحقق المعلم من صلاحية أداة القياس."
-            outcome = "mastered"
-        elif delta > 0:
-            strategy = "تدريب موجه على الأخطاء المتبقية، ثم تقييم متابعة مستقل بإشراف المعلم."
-            outcome = "partial"
-        else:
-            strategy = "تحليل أخطاء خطوات الحل بمثال خاطئ مقصود، ثم نقاش تبرير ترتيب الخطوات وتقييم مستقل."
-            outcome = "stagnant"
-        old_strategy = str(previous.get("proposed_strategy") or "").strip()
-        if strategy == old_strategy:
-            raise ValueError("الاستراتيجية الجديدة مطابقة حرفيًا للسابقة؛ يلزم مراجعة بشرية.")
-        return {"baseline_pct": round(before, 2), "followup_pct": round(after, 2),
-                "delta_pct_points": round(delta, 2), "threshold_pct": target,
-                "outcome": outcome, "previous_cycle_id": str(previous["id"]),
-                "previous_strategy": old_strategy, "proposed_strategy": strategy,
-                "source_draft_id": str(current["id"]),
-                "explanation": "استُخدمت نتيجة الدورة الثانية الفعلية وقرار الدورة السابقة المعتمد؛ لا يمكن إثبات سبب التغير من الدرجات وحدها."}
-
-    # V6.0: advisory adaptive agent. No automatic approvals or real-world actions.
-    st.markdown("---")
-    st.markdown("## 🧠 V6.0 — الوكيل التعليمي التكيفي (نسخة تجريبية)")
-    st.caption("ذاكرة موثقة + تحليل فجوة + تفسير القرار + اقتراح تدخل ثانٍ للمراجعة البشرية. لا يعتمد أو ينفذ تلقائيًا.")
-    try:
-        v6_client = get_supabase()
-        v6_school = str(get_selected_school_id())
-        v6_user = get_current_user_id(v6_client)
-        v6_role = str(st.session_state.get("mueen_school_role", "")).lower()
-        v6_manager = v6_role in ("principal", "coordinator")
-        v6_drafts = (v6_client.table("mueen_workflow_drafts").select("*")
-            .eq("school_id",v6_school).eq("status","approved")
-            .order("created_at",desc=True).limit(200).execute().data or [])
-        v6_cycles = (v6_client.table("mueen_agent_cycles").select("*")
-            .eq("school_id",v6_school).order("created_at",desc=True).limit(200).execute().data or [])
-        completed = [d for d in v6_drafts if d.get("baseline_assessment_id") is not None and d.get("followup_assessment_id") is not None]
-        st.metric("الدورات السابقة المحفوظة في ذاكرة الوكيل",len(v6_cycles))
-        # V6.1: one-click consolidated, read-only evidence and quality audit.
-        with st.expander("🧪 V6.1 — الفحص الشامل الموحد (قراءة فقط)", expanded=True):
-            st.caption("فحص الذاكرة، استقلال المقترحات، روابط التقييم، وملاحظات جودة الاختبار. لا يكتب إلى Supabase.")
-            if st.button("▶ تشغيل الفحص الشامل مرة واحدة", key="v61_integrated_audit"):
-                audit = []
-                def check(name, ok, detail):
-                    audit.append({"الفحص": name, "الحالة": "نجاح" if ok else "يحتاج إجراء", "التفاصيل": detail})
-                first = next((c for c in v6_cycles if
-                    str(c.get("student_code")) == "PILOT-MATH-01"
-                    and str(c.get("skill")) == "ترتيب خطوات الحل"
-                    and c.get("review_status") == "approved"), None)
-                check("ذاكرة الدورة الأولى", first is not None,
-                      "دورة أولى معتمدة موجودة" if first else "لم توجد دورة أولى معتمدة")
-                related = [d for d in v6_drafts if
-                    str(d.get("student_code")) == "PILOT-MATH-01"
-                    and str(d.get("skill")) == "ترتيب خطوات الحل"]
-                check("وجود المقترحات", bool(related), f"عدد المقترحات المعتمدة: {len(related)}")
-                second = [d for d in related if first and
-                    str(d.get("id")) != str(first.get("source_draft_id"))]
-                complete = [d for d in second if
-                    d.get("baseline_assessment_id") is not None and
-                    d.get("followup_assessment_id") is not None and
-                    str(d.get("baseline_assessment_id")) != str(d.get("followup_assessment_id"))]
-                check("اكتمال مقترح ثانٍ مستقل", bool(complete),
-                      f"مقترحات مستقلة: {len(second)}؛ مكتملة مبدئيًا: {len(complete)}")
-                base_usage = {}
-                for d in second:
-                    base_id = d.get("baseline_assessment_id")
-                    if base_id is not None:
-                        base_usage.setdefault(str(base_id), []).append(str(d.get("id"))[:8])
-                duplicates = {k: v for k, v in base_usage.items() if len(v) > 1}
-                check("عدم مشاركة تقييم قبلي بين مقترحين", not duplicates,
-                      "لا يوجد تكرار" if not duplicates else f"تقييمات مشتركة: {duplicates}")
-                check("تمييز البيانات التجريبية",
-                      bool(related) and all(d.get("is_demo") is True for d in related),
-                      "كل المقترحات المعنية موسومة تجريبية" if related else "لا توجد مقترحات")
-                check("مراجعة جودة الاختبار", False,
-                      "يلزم اعتماد بشري لصحة المسائل ومفتاح الإجابة وسلم الدرجات؛ لا يكفي توليد الذكاء الاصطناعي.")
-                check("إثبات تنفيذ التدخل الثاني", False,
-                      "لا يمكن إثبات تنفيذ النشاط من سجلات المقترحات والتقييمات وحدها.")
-                check("إثبات تكيف الوكيل من الذاكرة", False,
-                      "يلزم سجل قرار يبين كيف أثرت ذاكرة الدورة الأولى في اختيار التدخل الثاني.")
-                st.dataframe(pd.DataFrame(audit), use_container_width=True, hide_index=True)
-                passed = sum(r["الحالة"] == "نجاح" for r in audit)
-                st.info(f"نتيجة الفحص: {passed} من {len(audit)} ناجحة. الفحوص غير المثبتة ليست نجاحًا.")
-                st.download_button("📥 تنزيل تقرير V6.1 CSV",
-                    pd.DataFrame(audit).to_csv(index=False).encode("utf-8-sig"),
-                    "MUEEN_V6_1_Integrated_Audit.csv", "text/csv",
-                    key="v61_integrated_audit_csv")
-                st.warning("تنبيه جودة: في اختبار المقترح 02baedb4، حل 2y-4=10 يتطلب جمع 4، وليس طرحها. راجع مفتاح الإجابة وتوزيع الدرجات قبل أي تقييم بعدي.")
-        # Field pilot intake: in-memory validation only, no Supabase writes.
-        with st.expander("📋 التجربة الميدانية — استقبال نتائج الطلبة (معاينة فقط)", expanded=False):
-            from mueen_field_intake import render as render_field_intake
-            render_field_intake()
-
-        # V6.1 first milestone: real-record evidence preview; no DB writes.
-        with st.expander("🔬 V6.1 — فحص التكيف بين دورتين فعليتين (قراءة فقط)", expanded=False):
-            st.caption("يتطلب دورتين مختلفتين لنفس رمز الطالب والمهارة، واعتماد الدورة الأولى، وربط تقييمين مستقلين بالدورة الثانية. لا يحفظ قرارًا أو ينفذ تدخلًا.")
-            candidates = []
-            for draft in completed:
-                previous_cycles = [c for c in v6_cycles
-                    if str(c.get("source_draft_id")) != str(draft.get("id"))
-                    and str(c.get("student_code")) == str(draft.get("student_code"))
-                    and str(c.get("skill")) == str(draft.get("skill"))
-                    and c.get("review_status") == "approved"
-                    and str(c.get("school_id")) == v6_school]
-                if previous_cycles:
-                    candidates.append((draft, previous_cycles[0]))
-            if not candidates:
-                st.info("لا توجد بعد دورة ثانية مستقلة مرتبطة بدورة أولى معتمدة. لن نختلق بيانات أو نكرر تحليل الدورة الأولى.")
-            else:
-                options = list(range(len(candidates)))
-                choice = st.selectbox("الدورة الثانية المرشحة", options,
-                    format_func=lambda i: f'{candidates[i][0].get("student_code")} | {candidates[i][0].get("skill")} | {str(candidates[i][0].get("id"))[:8]}',
-                    key="v61_candidate_select")
-                draft, previous = candidates[choice]
-                if st.button("🔎 فحص أدلة الدورة الثانية", key="v61_preview"):
-                    try:
-                        ids = [draft["baseline_assessment_id"], draft["followup_assessment_id"]]
-                        records = (v6_client.table("assessment_records")
-                            .select("id,school_id,student_code,skill,assessment_type,score,max_score,created_at")
-                            .eq("school_id", v6_school).in_("id", ids).execute().data or [])
-                        record_map = {str(r["id"]): r for r in records}
-                        if len(record_map) != 2 or any(str(i) not in record_map for i in ids):
-                            raise ValueError("تعذر استرجاع التقييمين المستقلين.")
-                        baseline, followup = (record_map[str(i)] for i in ids)
-                        if baseline.get("created_at") and followup.get("created_at") and baseline["created_at"] >= followup["created_at"]:
-                            raise ValueError("تاريخ التقييم البعدي يجب أن يكون بعد القبلي.")
-                        # Avoid reusing assessment IDs across the two attempts.
-                        previous_ids = {str(previous.get("baseline_assessment_id")), str(previous.get("followup_assessment_id"))}
-                        if any(str(i) in previous_ids for i in ids):
-                            raise ValueError("لا يجوز إعادة استخدام تقييم من الدورة السابقة.")
-                        result = v61_candidate(previous, draft, baseline, followup)
-                        st.success("تم تحليل سجلات دورة ثانية مستقلة، دون كتابة أي بيانات.")
-                        st.write("**الدورة السابقة المعتمدة:**", result["previous_cycle_id"])
-                        st.write("**الاستراتيجية السابقة:**", result["previous_strategy"] or "غير مسجلة")
-                        st.write("**نتائج الدورة الثانية:**", f'{result["baseline_pct"]}% → {result["followup_pct"]}% ({result["delta_pct_points"]:+.2f} نقطة)')
-                        st.write("**الاقتراح الجديد:**", result["proposed_strategy"])
-                        st.info(result["explanation"])
-                        st.warning("هذا فحص قراءة فقط؛ ليس اعتمادًا أو حفظًا لدورة V6.1. إثبات تنفيذ تدخل ثانٍ يحتاج دليلًا مستقلًا ومراجعة بشرية.")
-                    except Exception as exc:
-                        st.error("فشل فحص أدلة الدورة الثانية: " + str(exc)[:350])
-
-        # V6.0: one-click, read-only memory/adaptation simulation.
-        # This does not create a second real intervention cycle.
-        with st.expander("🧪 اختبار الذاكرة والتكيف مرة واحدة (محاكاة آمنة)", expanded=False):
-            st.caption("يفحص الاسترجاع ويختبر قرارًا مختلفًا في سيناريو افتراضي؛ لا يكتب أي سجلات ولا يثبت تكيفًا فعليًا بين تدخلين.")
-            if st.button("▶ تشغيل اختبار الذاكرة والتكيف الشامل", key="v6_memory_adaptation_probe"):
-                matching = [
-                    c for c in v6_cycles
-                    if c.get("student_code") == "PILOT-MATH-01"
-                    and c.get("skill") == "ترتيب خطوات الحل"
-                ]
-                if not matching:
-                    st.error("فشل استرجاع الذاكرة: لا توجد دورة محفوظة للطالب والمهارة في المدرسة الحالية.")
-                else:
-                    prior = matching[0]
-                    previous = str(prior.get("proposed_strategy") or "").strip()
-                    before = float(prior.get("baseline_pct") or 0)
-                    after = float(prior.get("followup_pct") or 0)
-                    threshold = float(prior.get("threshold_pct") or 80)
-                    stored_delta = float(prior.get("delta_pct_points") or 0)
-                    correct_math = abs((after-before)-stored_delta) < 0.01
-                    # Hypothetical SECOND attempt: same mastery -> no improvement.
-                    hypothetical_after = after
-                    if hypothetical_after >= threshold:
-                        next_action = "نشاط إثرائي وتقييم احتفاظ لاحق"
-                    elif hypothetical_after > before:
-                        next_action = "تدريب متدرج على الأخطاء المتبقية ثم إعادة تقييم"
-                    else:
-                        next_action = ("بدل إعادة النموذج المحلول وبطاقات الخطوات، "
-                                       "استخدم تحليل خطأ متعمد ومناقشة سبب ترتيب كل خطوة، "
-                                       "ثم اختبارًا جديدًا بإشراف المعلم.")
-                    differs = bool(previous) and next_action != previous
-                    checks = [
-                        ("استرجاع دورة محفوظة", True),
-                        ("سلامة حساب التغير", correct_math),
-                        ("استرجاع الاستراتيجية السابقة", bool(previous)),
-                        ("اقتراح بديل في المحاكاة", differs),
-                        ("عدم تغيير قاعدة البيانات", True),
-                    ]
-                    for label, ok in checks:
-                        (st.success if ok else st.error)(("✅ " if ok else "❌ ") + label)
-                    st.write("**الاستراتيجية السابقة:**", previous or "غير محفوظة")
-                    st.write("**سيناريو افتراضي:**", f"{before:.0f}% ← {hypothetical_after:.0f}%، المستهدف {threshold:.0f}%")
-                    st.write("**الاقتراح البديل في المحاكاة:**", next_action)
-                    st.info("هذا اختبار منطق محلي فقط. لإثبات التكيف الفعلي يجب حفظ دورة جديدة موثقة بعد تدخل مستقل، ثم التأكد من أن منطق القرار يستخدم الذاكرة السابقة.")
-
-        if not completed:
-            st.info("لا توجد دورة V5.5 مكتملة الربط في المدرسة المختارة. اربط تقييمًا بعديًا أولًا.")
-        else:
-            selected = st.selectbox("اختر دورة مكتملة لتحليلها",[str(d["id"]) for d in completed],
-                format_func=lambda x:next((f'{d["student_code"]} | {d["skill"]} | {x[:8]}' for d in completed if str(d["id"])==x),x),key="v6_source")
-            source = next(d for d in completed if str(d["id"])==selected)
-            old = next((c for c in v6_cycles if str(c["source_draft_id"])==selected),None)
-            history = [c for c in v6_cycles if c["student_code"]==source["student_code"] and c["skill"]==source["skill"]]
-            st.write("**ذاكرة المهارة:**",len(history),"دورة/دورات تحليل محفوظة في المدرسة الحالية")
-            if old:
-                st.success("هذه الدورة حُللت وحُفظت سابقًا. يمنع النظام تكرار تحليل المصدر نفسه.")
-                st.write("**القرار المحفوظ:**",old.get("decision_text",""))
-                st.write("**الاقتراح المحفوظ:**",old.get("proposed_strategy",""))
-                st.write("**حالة المراجعة:**",old.get("review_status","pending"))
-            else:
-                if st.button("🔎 تحليل الأدلة وبناء قرار مفسّر",key="v6_analyse"):
-                    try:
-                        ids=[int(source["baseline_assessment_id"]),int(source["followup_assessment_id"])]
-                        rows=(v6_client.table("assessment_records").select("id,school_id,student_code,skill,assessment_type,score,max_score")
-                            .eq("school_id",v6_school).in_("id",ids).execute().data or [])
-                        by_id={int(r["id"]):r for r in rows}
-                        b=by_id.get(ids[0]);f=by_id.get(ids[1])
-                        if not b or not f or ids[0]==ids[1]:raise ValueError("التقييمان غير موجودين أو غير مستقلين.")
-                        if any(r["student_code"]!=source["student_code"] or r["skill"]!=source["skill"] for r in (b,f)):
-                            raise ValueError("اختلاف الطالب أو المهارة بين التقييمات.")
-                        if b["assessment_type"]!="baseline" or f["assessment_type"]!="follow_up":raise ValueError("نوع التقييم غير متوافق.")
-                        if float(b["max_score"])<=0 or float(f["max_score"])<=0:raise ValueError("الدرجة الكلية غير صحيحة.")
-                        before=100*float(b["score"])/float(b["max_score"])
-                        after=100*float(f["score"])/float(f["max_score"])
-                        target=float(source["threshold_pct"])
-                        delta=after-before
-                        if after>=target:
-                            outcome="mastered"; reason="بلغ حد الإتقان المحدد؛ يلزم تحقق المعلم قبل إغلاق الدورة."
-                            suggestion="نشاط تثبيت وتطبيق في سياق جديد مع اختبار احتفاظ لاحق."
-                        elif delta>0:
-                            outcome="partial"; reason="تحسن الأداء لكن النتيجة لا تزال أقل من حد الإتقان."
-                            suggestion="تدريب متدرج على الخطوات التي بقيت صعبة، مع تغذية راجعة فردية وتقييم جديد."
-                        else:
-                            outcome="stagnant"; reason="لم يظهر تحسن موجب في المحاولة المختارة؛ لا يمكن الجزم بسبب الإخفاق من الدرجات وحدها."
-                            suggestion="غيّر طريقة الشرح إلى نموذج محلول بصوت عالٍ، ثم نشاط ترتيب بطاقات الخطوات مع تغذية راجعة فورية."
-                        if history:
-                            previous=[str(c.get("proposed_strategy",""))[:160] for c in history[:3]]
-                            reason += " تمت مراجعة %s دورة محفوظة سابقة؛ راجع الاستراتيجيات السابقة لتجنب تكرارها." % len(history)
-                        else: previous=[]
-                        st.session_state["v6_analysis"]={"school_id":v6_school,"source_draft_id":selected,
-                            "student_code":source["student_code"],"skill":source["skill"],"is_demo":bool(source.get("is_demo",True)),
-                            "baseline_assessment_id":ids[0],"followup_assessment_id":ids[1],
-                            "baseline_pct":round(before,2),"followup_pct":round(after,2),"threshold_pct":target,
-                            "delta_pct_points":round(delta,2),"outcome":outcome,"decision_text":reason,
-                            "proposed_strategy":suggestion,"memory_summary":" | ".join(previous),"created_by":v6_user}
-                    except Exception as exc:st.error("تعذر التحليل: "+str(exc)[:300])
-                analysis=st.session_state.get("v6_analysis")
-                if analysis and analysis.get("source_draft_id")==selected and analysis.get("school_id")==v6_school:
-                    st.write("**القبلي / البعدي / التغير:**",f'{analysis["baseline_pct"]}% / {analysis["followup_pct"]}% / {analysis["delta_pct_points"]:+.1f} نقطة')
-                    st.write("**تفسير القرار:**",analysis["decision_text"])
-                    st.write("**استراتيجية بديلة مقترحة:**",analysis["proposed_strategy"])
-                    st.warning("التحليل قائم على قواعد قابلة للتدقيق؛ ليس تشخيصًا لسبب ضعف الطالب، ولا دليلًا على أثر تعليمي حقيقي.")
-                    confirmed=st.checkbox("راجعت الأدلة وأوافق على حفظ الاقتراح للمراجعة البشرية فقط",key="v6_confirm")
-                    if st.button("💾 حفظ القرار والذاكرة وسجل التدقيق",disabled=not confirmed,key="v6_save"):
-                        try:
-                            v6_client.table("mueen_agent_cycles").insert(analysis).execute()
-                            st.session_state.pop("v6_analysis",None)
-                            st.success("حُفظ تحليل الوكيل. حدّث الصفحة لعرض الذاكرة والمراجعة.")
-                        except Exception as exc:st.error("تعذر حفظ دورة الوكيل: "+str(exc)[:350])
-            if old and v6_manager and old.get("review_status")=="pending":
-                with st.expander("👨‍💼 مراجعة المدير للاقتراح",expanded=True):
-                    decision=st.radio("قرار المدير",["approved","rejected"],format_func=lambda x:"الموافقة على المقترح للمراجعة التعليمية" if x=="approved" else "رفض المقترح",key="v6_manager_decision")
-                    review_notes=st.text_area("مبررات القرار",key="v6_review_notes")
-                    if st.button("📝 تسجيل قرار المراجعة",key="v6_review_save"):
-                        try:
-                            if len(review_notes.strip())<8:raise ValueError("اكتب مبررًا لا يقل عن 8 أحرف.")
-                            v6_client.rpc("mueen_v6_review_cycle",{"p_cycle_id":str(old["id"]),"p_decision":decision,"p_notes":review_notes}).execute()
-                            st.success("حُفظ قرار المراجعة؛ لا ينشئ هذا الإجراء خطة جديدة أو ينفذ تدخلًا.")
-                        except Exception as exc:st.error("تعذر حفظ قرار المدير: "+str(exc)[:350])
-        if v6_cycles:
-            st.download_button("📥 تقرير ذاكرة الوكيل V6.0 (CSV)",pd.DataFrame(v6_cycles).to_csv(index=False).encode("utf-8-sig"),
-                "MUEEN_V6_Agent_Memory.csv","text/csv",key="v6_export")
-    except Exception as exc:
-        st.error("تعذر تشغيل V6.0. نفذ ترحيل قاعدة البيانات أولًا: "+str(exc)[:350])
 
 with mueen_page(7):
     st.markdown("## 🎓 V5.3 — اختبار التجربة التعليمية المتكاملة")
@@ -4147,3 +3681,482 @@ with mueen_page(5):
     5. اختيار المدرسة في الواجهة ليس بديلًا عن RLS؛ قاعدة البيانات هي التي يجب أن تمنع الوصول غير المصرح به.""")
     st.divider()
     st.caption("MUEEN AI V3.1 — عند تفعيل Supabase تُحفظ النتائج القبلية والبعدية وتوصيات المتابعة في قاعدة البيانات. استخدم رموزًا مجهولة الهوية واختبر ببيانات تجريبية أولًا.")
+
+
+# أدوات متقدمة اختيارية: تُعرض بعد رحلة المعلم ولا تعيق وصوله للتبويبات.
+# إخفاء العرض لا يغيّر الصلاحيات أو RLS أو سلوك الحفظ.
+if st.session_state.get("mueen_active_page") == 5:
+    st.divider()
+    show_advanced_teacher_tools = st.toggle(
+        "🛠️ إظهار أدوات الوكيل والدورات والفحوص المتقدمة",
+        value=False,
+        key="mueen_show_advanced_teacher_tools",
+        help="الرحلة الأساسية للمعلم تظهر أولًا. افتح هذه الأدوات عند الحاجة فقط.",
+    )
+    if show_advanced_teacher_tools:
+        # School agent: persistent, authenticated and human-reviewed.
+        from mueen_school_agent import render_school_agent
+        if st.session_state.get("mueen_active_page") == 5:
+            with st.expander("🏫 مُعين للمدارس — حفظ وذاكرة واعتماد المعلم", expanded=True):
+                render_school_agent(get_supabase, get_selected_school_id, get_current_user_id)
+
+        # V6.2 school pilot: subject-neutral, read-only teacher workflow.
+        from mueen_school_pilot import render_school_pilot
+        if st.session_state.get("mueen_active_page") == 5:
+            with st.expander("🏫 تجربة المعلم لأي مادة — تحليل وتدخل تكيفي (قراءة فقط)", expanded=True):
+                render_school_pilot()
+
+        with mueen_page(5):
+            st.markdown("## 🧭 V5.5 — دورة التدخل العلاجي الموثقة")
+            st.warning("البيانات السابقة تجريبية. لا تُفسّر النتائج الافتراضية على أنها أثر تعليمي حقيقي.")
+            st.caption("يتطلب تشغيل MUEEN_V5_5_Migration.sql في Supabase أولًا. لا يحذف التحديث أي بيانات.")
+            try:
+                v55_client = get_supabase()
+                v55_school = str(get_selected_school_id())
+                v55_uid = get_current_user_id(v55_client)
+                v55_role = str(st.session_state.get("mueen_school_role", "")).lower()
+                v55_manage = v55_role in ("principal", "coordinator")
+                v55_drafts = (v55_client.table("mueen_workflow_drafts").select("*")
+                    .eq("school_id", v55_school).order("created_at",desc=True).limit(200).execute().data or [])
+                st.caption("معرف المدرسة المختارة: " + v55_school)
+            except Exception as e:
+                st.error("تعذر قراءة بيانات V5.5. نفّذ ملف SQL وتحقق من المدرسة: " + str(e)[:300])
+                v55_drafts = None
+            if v55_drafts is not None:
+                with st.expander("① إدخال تقييم وتحديد المحاولة صراحة",expanded=True):
+                    v55_code = st.text_input("رمز الطالب",value="PILOT-MATH-01",key="v55_code")
+                    v55_skill = st.text_input("المهارة",value="ترتيب خطوات الحل",key="v55_skill")
+                    v55_subject = st.text_input("المادة",value="الرياضيات",key="v55_subject")
+                    v55_grade = st.text_input("الصف",value="السابع",key="v55_grade")
+                    v55_kind = st.radio("نوع التقييم",["قبلي","بعدي"],horizontal=True,key="v55_kind")
+                    col_a,col_b = st.columns(2)
+                    v55_score = col_a.number_input("الدرجة",min_value=0.0,value=8.0,key="v55_score")
+                    v55_max = col_b.number_input("الدرجة الكلية",min_value=0.1,value=20.0,key="v55_max")
+                    st.info("المحاولات المتعددة مسموحة. اختر المحاولة المطلوبة بالمعرف عند ربطها بالخطة؛ لا تعتمد أعلى درجة تلقائيًا.")
+                    if st.button("💾 تسجيل محاولة تقييم جديدة",key="v55_save_assessment"):
+                        try:
+                            if not v55_code.strip() or not v55_skill.strip() or v55_score>v55_max:
+                                raise ValueError("تحقق من الرمز والمهارة والدرجات")
+                            typ = "baseline" if v55_kind=="قبلي" else "follow_up"
+                            previous = (v55_client.table("assessment_records").select("id,score,max_score,created_at")
+                                .eq("school_id",v55_school).eq("student_code",v55_code.strip())
+                                .eq("skill",v55_skill.strip()).eq("assessment_type",typ)
+                                .order("created_at",desc=True).limit(1).execute().data or [])
+                            if previous and float(previous[0]["score"])==float(v55_score) and float(previous[0]["max_score"])==float(v55_max):
+                                st.warning("يوجد تقييم حديث بنفس الدرجة. تحقق من المحاولات أدناه قبل إنشاء نسخة أخرى.")
+                            else:
+                                save_assessment_records([{"student_code":v55_code.strip(),"skill":v55_skill.strip(),
+                                    "assessment_type":typ,"score":v55_score,"max_score":v55_max}])
+                                st.success("تم حفظ محاولة جديدة. حدّث الصفحة لعرض معرفها.")
+                        except Exception as e:st.error("تعذر الحفظ: "+str(e)[:350])
+                    v55_assessments=(v55_client.table("assessment_records").select("id,student_code,skill,assessment_type,score,max_score,created_at")
+                        .eq("school_id",v55_school).eq("student_code",v55_code.strip()).eq("skill",v55_skill.strip())
+                        .order("created_at",desc=True).limit(100).execute().data or []) if v55_code.strip() and v55_skill.strip() else []
+                    st.dataframe(pd.DataFrame(v55_assessments),use_container_width=True,hide_index=True)
+                with st.expander("② إنشاء مقترح مرتبط بتقييم قبلي محدد",expanded=True):
+                    baselines=[r for r in v55_assessments if r["assessment_type"]=="baseline"]
+                    if not baselines:st.info("سجّل تقييمًا قبليًا أولًا.")
+                    else:
+                        v55_base_id=st.selectbox("اختر محاولة التقييم القبلي (المعرف والتاريخ والدرجة)",
+                            [str(r["id"]) for r in baselines],format_func=lambda x:next(
+                            (f'{r["created_at"]} | {r["score"]}/{r["max_score"]} | {x[:8]}' for r in baselines if str(r["id"])==x),x),key="v55_baseline_id")
+                        v55_threshold=st.number_input("حد الإتقان %",min_value=1,max_value=100,value=80,key="v55_threshold")
+                        v55_notes=st.text_area("ملاحظات المعلم",key="v55_notes")
+                        v55_demo=st.checkbox("هذه بيانات تجريبية/محاكاة وليست نتائج حقيقية",value=True,key="v55_demo")
+                        if st.button("🤖 توليد الخطة والاختبار",key="v55_generate"):
+                            try:
+                                br=next(r for r in baselines if str(r["id"])==v55_base_id)
+                                pct=100*float(br["score"])/float(br["max_score"])
+                                plan=create_plan("gpt-4.1-mini",v55_subject,v55_grade,v55_skill,pct,"العربية",v55_notes,"طالب مجهول",v55_threshold)
+                                quiz=create_quiz("gpt-4.1-mini",v55_subject,v55_grade,v55_skill,"العربية")
+                                if len(str(plan).strip())<100 or len(str(quiz).strip())<40:raise ValueError("المخرجات غير مكتملة")
+                                st.session_state["v55_generated"]={"school":v55_school,"code":v55_code.strip(),"skill":v55_skill.strip(),
+                                    "subject":v55_subject,"grade":v55_grade,"baseline_id":v55_base_id,"before":pct,
+                                    "threshold":v55_threshold,"plan":plan,"quiz":quiz,"demo":v55_demo}
+                                st.success("تم التوليد؛ راجع المخرجات ثم أرسل المقترح.")
+                            except Exception as e:st.error("فشل التوليد: "+str(e)[:350])
+                        gen=st.session_state.get("v55_generated",{})
+                        if gen.get("school")==v55_school:
+                            st.write("**الخطة:**");st.write(gen["plan"])
+                            st.write("**الاختبار:**");st.write(gen["quiz"])
+                            v55_review=st.checkbox("راجعت المقترح وأوافق على إرساله للمدير",key="v55_review")
+                            if st.button("📨 إرسال المقترح",disabled=not v55_review,key="v55_submit"):
+                                try:
+                                    payload={"school_id":v55_school,"created_by":v55_uid,"student_code":gen["code"],
+                                        "skill":gen["skill"],"subject":gen["subject"],"grade":gen["grade"],
+                                        "baseline_pct":gen["before"],"threshold_pct":gen["threshold"],
+                                        "plan_text":gen["plan"],"quiz_text":gen["quiz"],"status":"pending",
+                                        "baseline_assessment_id":int(gen["baseline_id"]),"is_demo":gen["demo"]}
+                                    dup=[d for d in v55_drafts if d.get("created_by")==v55_uid and d.get("student_code")==gen["code"]
+                                         and d.get("skill")==gen["skill"] and d.get("status")=="pending"]
+                                    if dup:raise ValueError("لديك مقترح معلّق للمهارة نفسها. راجعه قبل إرسال مقترح آخر.")
+                                    v55_client.table("mueen_workflow_drafts").insert(payload).execute()
+                                    st.session_state.pop("v55_generated",None)
+                                    st.success("أُرسل المقترح. حدّث الصفحة ليظهر في حساب المدير.")
+                                except Exception as e:st.error("تعذر الإرسال: "+str(e)[:350])
+                with st.expander("③ اعتماد المدير — معاملة ذرّية تمنع التكرار",expanded=v55_manage):
+                    pending=[d for d in v55_drafts if d.get("status")=="pending"]
+                    if not v55_manage:st.info("الاعتماد للمدير أو المنسق فقط.")
+                    elif not pending:st.info("لا توجد مقترحات معلقة.")
+                    else:
+                        draft_id=st.selectbox("اختر المقترح",[str(d["id"]) for d in pending],key="v55_approve_id")
+                        d=next(d for d in pending if str(d["id"])==draft_id)
+                        st.caption("بيانات تجريبية" if d.get("is_demo",True) else "بيانات تشغيلية — يلزم تحقق بشري")
+                        st.write(d["quiz_text"])
+                        approved_text=st.text_area("الخطة بعد المراجعة",value=d["plan_text"],height=180,key="v55_approved_text")
+                        manager_ok=st.checkbox("راجعت الخطة والاختبار وأوافق على الاعتماد",key="v55_manager_ok")
+                        if st.button("✅ اعتماد الخطة مرة واحدة",disabled=not manager_ok,key="v55_approve"):
+                            try:
+                                result=v55_client.rpc("mueen_v55_approve",{"p_draft_id":draft_id,"p_reviewed_plan":approved_text}).execute().data
+                                st.success("الخطة معتمدة، معرّفها: "+str(result)+". العملية آمنة عند تكرار الضغط.")
+                            except Exception as e:st.error("تعذر الاعتماد: "+str(e)[:350])
+                with st.expander("④ ربط تقييم بعدي محدد وتوثيق المتابعة",expanded=True):
+                    approved=[d for d in v55_drafts if d.get("status")=="approved" and d.get("intervention_plan_id")]
+                    if not approved:st.info("لا توجد خطط معتمدة.")
+                    else:
+                        chosen=st.selectbox("اختر الخطة المعتمدة",[str(d["id"]) for d in approved],
+                            format_func=lambda x:next((f'{d["student_code"]} | {d["skill"]} | {x[:8]}' for d in approved if str(d["id"])==x),x),key="v55_follow_draft")
+                        d=next(d for d in approved if str(d["id"])==chosen)
+                        if d.get("followup_assessment_id"):
+                            st.success("تم ربط المتابعة بهذه الخطة. التقييم البعدي: "+str(d["followup_assessment_id"]))
+                        else:
+                            posts=(v55_client.table("assessment_records").select("id,score,max_score,created_at")
+                                .eq("school_id",v55_school).eq("student_code",d["student_code"])
+                                .eq("skill",d["skill"]).eq("assessment_type","follow_up")
+                                .order("created_at",desc=True).limit(100).execute().data or [])
+                            if not posts:st.info("سجّل تقييمًا بعديًا من القسم ①.")
+                            else:
+                                post_id=st.selectbox("اختر المحاولة البعدية المقصودة (لا اختيار تلقائي لأعلى نتيجة)",
+                                    [str(r["id"]) for r in posts],format_func=lambda x:next(
+                                    (f'{r["created_at"]} | {r["score"]}/{r["max_score"]} | {x[:8]}' for r in posts if str(r["id"])==x),x),key="v55_post_id")
+                                activity=st.text_area("وصف النشاط المنفذ — في المحاكاة اذكر أنه افتراضي",key="v55_activity")
+                                notes=st.text_area("ملاحظات المتابعة",key="v55_follow_notes")
+                                if v55_manage and st.button("💾 ربط التقييم وحفظ المتابعة",key="v55_save_follow"):
+                                    try:
+                                        if not activity.strip():raise ValueError("اكتب وصف النشاط.")
+                                        if d.get("is_demo",True) and not st.session_state.get("v55_confirm_demo",False):
+                                            raise ValueError("فعّل تأكيد المحاكاة قبل الحفظ.")
+                                        res=v55_client.rpc("mueen_v55_record_followup",{
+                                            "p_draft_id":chosen,"p_assessment_id":int(post_id),
+                                            "p_activity":activity,"p_notes":notes}).execute().data
+                                        st.success("حُفظت المتابعة وربطت بالمحاولة المختارة: "+str(res))
+                                    except Exception as e:st.error("تعذر حفظ المتابعة: "+str(e)[:350])
+                                if d.get("is_demo",True):st.checkbox("أؤكد أن هذا النشاط والدرجات محاكاة وليست دليل تنفيذ فعلي",key="v55_confirm_demo")
+                                if not v55_manage:st.info("يحفظ المدير/المنسق المتابعة بعد اختيار المحاولة.")
+                with st.expander("⑤ تقرير الدورة مع تمييز البيانات التجريبية",expanded=True):
+                    report=[]
+                    for d in v55_drafts:
+                        row={"معرف المقترح":d["id"],"المدرسة":v55_school,"رمز الطالب":d["student_code"],
+                            "المهارة":d["skill"],"نوع البيانات":"تجريبية" if d.get("is_demo",True) else "تشغيلية",
+                            "حالة الاعتماد":d["status"],"معرف الخطة":d.get("intervention_plan_id"),
+                            "معرف التقييم القبلي":d.get("baseline_assessment_id"),
+                            "القبلي %":d["baseline_pct"],"معرف التقييم البعدي":d.get("followup_assessment_id"),
+                            "البعدي %":None,"التغير (نقطة)":None,"القرار": "بانتظار تقييم بعدي مرتبط"}
+                        if d.get("followup_assessment_id"):
+                            try:
+                                matched=(v55_client.table("assessment_records").select("id,score,max_score,school_id,student_code,skill,assessment_type")
+                                    .eq("id",str(d["followup_assessment_id"])).eq("school_id",v55_school).limit(1).execute().data or [])
+                                if len(matched)==1 and matched[0]["student_code"]==d["student_code"] and matched[0]["skill"]==d["skill"] and matched[0]["assessment_type"]=="follow_up":
+                                    pct=100*float(matched[0]["score"])/float(matched[0]["max_score"])
+                                    row["البعدي %"]=round(pct,2)
+                                    row["التغير (نقطة)"]=round(pct-float(d["baseline_pct"]),2)
+                                    row["القرار"]=decide(float(d["baseline_pct"]),pct,float(d["threshold_pct"]))[0]
+                                else:row["القرار"]="تعارض في ربط التقييم البعدي"
+                            except Exception as e:row["القرار"]="تعذر التحقق: "+str(e)[:60]
+                        report.append(row)
+                    if report:
+                        frame=pd.DataFrame(report)
+                        st.dataframe(frame,use_container_width=True,hide_index=True)
+                        st.download_button("📥 تنزيل تقرير V5.5 CSV",frame.to_csv(index=False).encode("utf-8-sig"),
+                            "MUEEN_V5_5_Workflow_Report.csv","text/csv",key="v55_download")
+                    else:st.info("لا توجد مقترحات بعد.")
+
+            # V6.1: evidence-based second-cycle candidate (read-only until schema and RLS review).
+            def v61_candidate(previous, current, baseline, followup):
+                """Compute a second-cycle recommendation using actual linked assessments."""
+                if str(previous.get("source_draft_id")) == str(current.get("id")):
+                    raise ValueError("لا يجوز إعادة استخدام مصدر الدورة السابقة.")
+                if previous.get("review_status") != "approved":
+                    raise ValueError("يجب اعتماد الدورة السابقة بشريًا أولًا.")
+                if (str(previous.get("student_code")) != str(current.get("student_code"))
+                        or str(previous.get("skill")) != str(current.get("skill"))):
+                    raise ValueError("يجب تطابق رمز الطالب والمهارة بين الدورتين.")
+                if any(str(r.get("student_code")) != str(current.get("student_code"))
+                       or str(r.get("skill")) != str(current.get("skill")) for r in (baseline, followup)):
+                    raise ValueError("سجلات التقييم لا تطابق الطالب والمهارة.")
+                if baseline.get("assessment_type") != "baseline" or followup.get("assessment_type") != "follow_up":
+                    raise ValueError("يجب وجود تقييم قبلي وتقييم بعدي مستقلين.")
+                if str(baseline.get("id")) == str(followup.get("id")):
+                    raise ValueError("لا يجوز استخدام التقييم نفسه مرتين.")
+                for r in (baseline, followup):
+                    score, maximum = float(r["score"]), float(r["max_score"])
+                    if maximum <= 0 or not 0 <= score <= maximum:
+                        raise ValueError("درجات التقييم غير صالحة.")
+                before = 100 * float(baseline["score"]) / float(baseline["max_score"])
+                after = 100 * float(followup["score"]) / float(followup["max_score"])
+                target = float(current.get("threshold_pct") or previous.get("threshold_pct") or 80)
+                delta = after - before
+                if after >= target:
+                    strategy = "نشاط إثرائي وتقييم احتفاظ لاحق، بعد تحقق المعلم من صلاحية أداة القياس."
+                    outcome = "mastered"
+                elif delta > 0:
+                    strategy = "تدريب موجه على الأخطاء المتبقية، ثم تقييم متابعة مستقل بإشراف المعلم."
+                    outcome = "partial"
+                else:
+                    strategy = "تحليل أخطاء خطوات الحل بمثال خاطئ مقصود، ثم نقاش تبرير ترتيب الخطوات وتقييم مستقل."
+                    outcome = "stagnant"
+                old_strategy = str(previous.get("proposed_strategy") or "").strip()
+                if strategy == old_strategy:
+                    raise ValueError("الاستراتيجية الجديدة مطابقة حرفيًا للسابقة؛ يلزم مراجعة بشرية.")
+                return {"baseline_pct": round(before, 2), "followup_pct": round(after, 2),
+                        "delta_pct_points": round(delta, 2), "threshold_pct": target,
+                        "outcome": outcome, "previous_cycle_id": str(previous["id"]),
+                        "previous_strategy": old_strategy, "proposed_strategy": strategy,
+                        "source_draft_id": str(current["id"]),
+                        "explanation": "استُخدمت نتيجة الدورة الثانية الفعلية وقرار الدورة السابقة المعتمد؛ لا يمكن إثبات سبب التغير من الدرجات وحدها."}
+
+            # V6.0: advisory adaptive agent. No automatic approvals or real-world actions.
+            st.markdown("---")
+            st.markdown("## 🧠 V6.0 — الوكيل التعليمي التكيفي (نسخة تجريبية)")
+            st.caption("ذاكرة موثقة + تحليل فجوة + تفسير القرار + اقتراح تدخل ثانٍ للمراجعة البشرية. لا يعتمد أو ينفذ تلقائيًا.")
+            try:
+                v6_client = get_supabase()
+                v6_school = str(get_selected_school_id())
+                v6_user = get_current_user_id(v6_client)
+                v6_role = str(st.session_state.get("mueen_school_role", "")).lower()
+                v6_manager = v6_role in ("principal", "coordinator")
+                v6_drafts = (v6_client.table("mueen_workflow_drafts").select("*")
+                    .eq("school_id",v6_school).eq("status","approved")
+                    .order("created_at",desc=True).limit(200).execute().data or [])
+                v6_cycles = (v6_client.table("mueen_agent_cycles").select("*")
+                    .eq("school_id",v6_school).order("created_at",desc=True).limit(200).execute().data or [])
+                completed = [d for d in v6_drafts if d.get("baseline_assessment_id") is not None and d.get("followup_assessment_id") is not None]
+                st.metric("الدورات السابقة المحفوظة في ذاكرة الوكيل",len(v6_cycles))
+                # V6.1: one-click consolidated, read-only evidence and quality audit.
+                with st.expander("🧪 V6.1 — الفحص الشامل الموحد (قراءة فقط)", expanded=True):
+                    st.caption("فحص الذاكرة، استقلال المقترحات، روابط التقييم، وملاحظات جودة الاختبار. لا يكتب إلى Supabase.")
+                    if st.button("▶ تشغيل الفحص الشامل مرة واحدة", key="v61_integrated_audit"):
+                        audit = []
+                        def check(name, ok, detail):
+                            audit.append({"الفحص": name, "الحالة": "نجاح" if ok else "يحتاج إجراء", "التفاصيل": detail})
+                        first = next((c for c in v6_cycles if
+                            str(c.get("student_code")) == "PILOT-MATH-01"
+                            and str(c.get("skill")) == "ترتيب خطوات الحل"
+                            and c.get("review_status") == "approved"), None)
+                        check("ذاكرة الدورة الأولى", first is not None,
+                              "دورة أولى معتمدة موجودة" if first else "لم توجد دورة أولى معتمدة")
+                        related = [d for d in v6_drafts if
+                            str(d.get("student_code")) == "PILOT-MATH-01"
+                            and str(d.get("skill")) == "ترتيب خطوات الحل"]
+                        check("وجود المقترحات", bool(related), f"عدد المقترحات المعتمدة: {len(related)}")
+                        second = [d for d in related if first and
+                            str(d.get("id")) != str(first.get("source_draft_id"))]
+                        complete = [d for d in second if
+                            d.get("baseline_assessment_id") is not None and
+                            d.get("followup_assessment_id") is not None and
+                            str(d.get("baseline_assessment_id")) != str(d.get("followup_assessment_id"))]
+                        check("اكتمال مقترح ثانٍ مستقل", bool(complete),
+                              f"مقترحات مستقلة: {len(second)}؛ مكتملة مبدئيًا: {len(complete)}")
+                        base_usage = {}
+                        for d in second:
+                            base_id = d.get("baseline_assessment_id")
+                            if base_id is not None:
+                                base_usage.setdefault(str(base_id), []).append(str(d.get("id"))[:8])
+                        duplicates = {k: v for k, v in base_usage.items() if len(v) > 1}
+                        check("عدم مشاركة تقييم قبلي بين مقترحين", not duplicates,
+                              "لا يوجد تكرار" if not duplicates else f"تقييمات مشتركة: {duplicates}")
+                        check("تمييز البيانات التجريبية",
+                              bool(related) and all(d.get("is_demo") is True for d in related),
+                              "كل المقترحات المعنية موسومة تجريبية" if related else "لا توجد مقترحات")
+                        check("مراجعة جودة الاختبار", False,
+                              "يلزم اعتماد بشري لصحة المسائل ومفتاح الإجابة وسلم الدرجات؛ لا يكفي توليد الذكاء الاصطناعي.")
+                        check("إثبات تنفيذ التدخل الثاني", False,
+                              "لا يمكن إثبات تنفيذ النشاط من سجلات المقترحات والتقييمات وحدها.")
+                        check("إثبات تكيف الوكيل من الذاكرة", False,
+                              "يلزم سجل قرار يبين كيف أثرت ذاكرة الدورة الأولى في اختيار التدخل الثاني.")
+                        st.dataframe(pd.DataFrame(audit), use_container_width=True, hide_index=True)
+                        passed = sum(r["الحالة"] == "نجاح" for r in audit)
+                        st.info(f"نتيجة الفحص: {passed} من {len(audit)} ناجحة. الفحوص غير المثبتة ليست نجاحًا.")
+                        st.download_button("📥 تنزيل تقرير V6.1 CSV",
+                            pd.DataFrame(audit).to_csv(index=False).encode("utf-8-sig"),
+                            "MUEEN_V6_1_Integrated_Audit.csv", "text/csv",
+                            key="v61_integrated_audit_csv")
+                        st.warning("تنبيه جودة: في اختبار المقترح 02baedb4، حل 2y-4=10 يتطلب جمع 4، وليس طرحها. راجع مفتاح الإجابة وتوزيع الدرجات قبل أي تقييم بعدي.")
+                # Field pilot intake: in-memory validation only, no Supabase writes.
+                with st.expander("📋 التجربة الميدانية — استقبال نتائج الطلبة (معاينة فقط)", expanded=False):
+                    from mueen_field_intake import render as render_field_intake
+                    render_field_intake()
+
+                # V6.1 first milestone: real-record evidence preview; no DB writes.
+                with st.expander("🔬 V6.1 — فحص التكيف بين دورتين فعليتين (قراءة فقط)", expanded=False):
+                    st.caption("يتطلب دورتين مختلفتين لنفس رمز الطالب والمهارة، واعتماد الدورة الأولى، وربط تقييمين مستقلين بالدورة الثانية. لا يحفظ قرارًا أو ينفذ تدخلًا.")
+                    candidates = []
+                    for draft in completed:
+                        previous_cycles = [c for c in v6_cycles
+                            if str(c.get("source_draft_id")) != str(draft.get("id"))
+                            and str(c.get("student_code")) == str(draft.get("student_code"))
+                            and str(c.get("skill")) == str(draft.get("skill"))
+                            and c.get("review_status") == "approved"
+                            and str(c.get("school_id")) == v6_school]
+                        if previous_cycles:
+                            candidates.append((draft, previous_cycles[0]))
+                    if not candidates:
+                        st.info("لا توجد بعد دورة ثانية مستقلة مرتبطة بدورة أولى معتمدة. لن نختلق بيانات أو نكرر تحليل الدورة الأولى.")
+                    else:
+                        options = list(range(len(candidates)))
+                        choice = st.selectbox("الدورة الثانية المرشحة", options,
+                            format_func=lambda i: f'{candidates[i][0].get("student_code")} | {candidates[i][0].get("skill")} | {str(candidates[i][0].get("id"))[:8]}',
+                            key="v61_candidate_select")
+                        draft, previous = candidates[choice]
+                        if st.button("🔎 فحص أدلة الدورة الثانية", key="v61_preview"):
+                            try:
+                                ids = [draft["baseline_assessment_id"], draft["followup_assessment_id"]]
+                                records = (v6_client.table("assessment_records")
+                                    .select("id,school_id,student_code,skill,assessment_type,score,max_score,created_at")
+                                    .eq("school_id", v6_school).in_("id", ids).execute().data or [])
+                                record_map = {str(r["id"]): r for r in records}
+                                if len(record_map) != 2 or any(str(i) not in record_map for i in ids):
+                                    raise ValueError("تعذر استرجاع التقييمين المستقلين.")
+                                baseline, followup = (record_map[str(i)] for i in ids)
+                                if baseline.get("created_at") and followup.get("created_at") and baseline["created_at"] >= followup["created_at"]:
+                                    raise ValueError("تاريخ التقييم البعدي يجب أن يكون بعد القبلي.")
+                                # Avoid reusing assessment IDs across the two attempts.
+                                previous_ids = {str(previous.get("baseline_assessment_id")), str(previous.get("followup_assessment_id"))}
+                                if any(str(i) in previous_ids for i in ids):
+                                    raise ValueError("لا يجوز إعادة استخدام تقييم من الدورة السابقة.")
+                                result = v61_candidate(previous, draft, baseline, followup)
+                                st.success("تم تحليل سجلات دورة ثانية مستقلة، دون كتابة أي بيانات.")
+                                st.write("**الدورة السابقة المعتمدة:**", result["previous_cycle_id"])
+                                st.write("**الاستراتيجية السابقة:**", result["previous_strategy"] or "غير مسجلة")
+                                st.write("**نتائج الدورة الثانية:**", f'{result["baseline_pct"]}% → {result["followup_pct"]}% ({result["delta_pct_points"]:+.2f} نقطة)')
+                                st.write("**الاقتراح الجديد:**", result["proposed_strategy"])
+                                st.info(result["explanation"])
+                                st.warning("هذا فحص قراءة فقط؛ ليس اعتمادًا أو حفظًا لدورة V6.1. إثبات تنفيذ تدخل ثانٍ يحتاج دليلًا مستقلًا ومراجعة بشرية.")
+                            except Exception as exc:
+                                st.error("فشل فحص أدلة الدورة الثانية: " + str(exc)[:350])
+
+                # V6.0: one-click, read-only memory/adaptation simulation.
+                # This does not create a second real intervention cycle.
+                with st.expander("🧪 اختبار الذاكرة والتكيف مرة واحدة (محاكاة آمنة)", expanded=False):
+                    st.caption("يفحص الاسترجاع ويختبر قرارًا مختلفًا في سيناريو افتراضي؛ لا يكتب أي سجلات ولا يثبت تكيفًا فعليًا بين تدخلين.")
+                    if st.button("▶ تشغيل اختبار الذاكرة والتكيف الشامل", key="v6_memory_adaptation_probe"):
+                        matching = [
+                            c for c in v6_cycles
+                            if c.get("student_code") == "PILOT-MATH-01"
+                            and c.get("skill") == "ترتيب خطوات الحل"
+                        ]
+                        if not matching:
+                            st.error("فشل استرجاع الذاكرة: لا توجد دورة محفوظة للطالب والمهارة في المدرسة الحالية.")
+                        else:
+                            prior = matching[0]
+                            previous = str(prior.get("proposed_strategy") or "").strip()
+                            before = float(prior.get("baseline_pct") or 0)
+                            after = float(prior.get("followup_pct") or 0)
+                            threshold = float(prior.get("threshold_pct") or 80)
+                            stored_delta = float(prior.get("delta_pct_points") or 0)
+                            correct_math = abs((after-before)-stored_delta) < 0.01
+                            # Hypothetical SECOND attempt: same mastery -> no improvement.
+                            hypothetical_after = after
+                            if hypothetical_after >= threshold:
+                                next_action = "نشاط إثرائي وتقييم احتفاظ لاحق"
+                            elif hypothetical_after > before:
+                                next_action = "تدريب متدرج على الأخطاء المتبقية ثم إعادة تقييم"
+                            else:
+                                next_action = ("بدل إعادة النموذج المحلول وبطاقات الخطوات، "
+                                               "استخدم تحليل خطأ متعمد ومناقشة سبب ترتيب كل خطوة، "
+                                               "ثم اختبارًا جديدًا بإشراف المعلم.")
+                            differs = bool(previous) and next_action != previous
+                            checks = [
+                                ("استرجاع دورة محفوظة", True),
+                                ("سلامة حساب التغير", correct_math),
+                                ("استرجاع الاستراتيجية السابقة", bool(previous)),
+                                ("اقتراح بديل في المحاكاة", differs),
+                                ("عدم تغيير قاعدة البيانات", True),
+                            ]
+                            for label, ok in checks:
+                                (st.success if ok else st.error)(("✅ " if ok else "❌ ") + label)
+                            st.write("**الاستراتيجية السابقة:**", previous or "غير محفوظة")
+                            st.write("**سيناريو افتراضي:**", f"{before:.0f}% ← {hypothetical_after:.0f}%، المستهدف {threshold:.0f}%")
+                            st.write("**الاقتراح البديل في المحاكاة:**", next_action)
+                            st.info("هذا اختبار منطق محلي فقط. لإثبات التكيف الفعلي يجب حفظ دورة جديدة موثقة بعد تدخل مستقل، ثم التأكد من أن منطق القرار يستخدم الذاكرة السابقة.")
+
+                if not completed:
+                    st.info("لا توجد دورة V5.5 مكتملة الربط في المدرسة المختارة. اربط تقييمًا بعديًا أولًا.")
+                else:
+                    selected = st.selectbox("اختر دورة مكتملة لتحليلها",[str(d["id"]) for d in completed],
+                        format_func=lambda x:next((f'{d["student_code"]} | {d["skill"]} | {x[:8]}' for d in completed if str(d["id"])==x),x),key="v6_source")
+                    source = next(d for d in completed if str(d["id"])==selected)
+                    old = next((c for c in v6_cycles if str(c["source_draft_id"])==selected),None)
+                    history = [c for c in v6_cycles if c["student_code"]==source["student_code"] and c["skill"]==source["skill"]]
+                    st.write("**ذاكرة المهارة:**",len(history),"دورة/دورات تحليل محفوظة في المدرسة الحالية")
+                    if old:
+                        st.success("هذه الدورة حُللت وحُفظت سابقًا. يمنع النظام تكرار تحليل المصدر نفسه.")
+                        st.write("**القرار المحفوظ:**",old.get("decision_text",""))
+                        st.write("**الاقتراح المحفوظ:**",old.get("proposed_strategy",""))
+                        st.write("**حالة المراجعة:**",old.get("review_status","pending"))
+                    else:
+                        if st.button("🔎 تحليل الأدلة وبناء قرار مفسّر",key="v6_analyse"):
+                            try:
+                                ids=[int(source["baseline_assessment_id"]),int(source["followup_assessment_id"])]
+                                rows=(v6_client.table("assessment_records").select("id,school_id,student_code,skill,assessment_type,score,max_score")
+                                    .eq("school_id",v6_school).in_("id",ids).execute().data or [])
+                                by_id={int(r["id"]):r for r in rows}
+                                b=by_id.get(ids[0]);f=by_id.get(ids[1])
+                                if not b or not f or ids[0]==ids[1]:raise ValueError("التقييمان غير موجودين أو غير مستقلين.")
+                                if any(r["student_code"]!=source["student_code"] or r["skill"]!=source["skill"] for r in (b,f)):
+                                    raise ValueError("اختلاف الطالب أو المهارة بين التقييمات.")
+                                if b["assessment_type"]!="baseline" or f["assessment_type"]!="follow_up":raise ValueError("نوع التقييم غير متوافق.")
+                                if float(b["max_score"])<=0 or float(f["max_score"])<=0:raise ValueError("الدرجة الكلية غير صحيحة.")
+                                before=100*float(b["score"])/float(b["max_score"])
+                                after=100*float(f["score"])/float(f["max_score"])
+                                target=float(source["threshold_pct"])
+                                delta=after-before
+                                if after>=target:
+                                    outcome="mastered"; reason="بلغ حد الإتقان المحدد؛ يلزم تحقق المعلم قبل إغلاق الدورة."
+                                    suggestion="نشاط تثبيت وتطبيق في سياق جديد مع اختبار احتفاظ لاحق."
+                                elif delta>0:
+                                    outcome="partial"; reason="تحسن الأداء لكن النتيجة لا تزال أقل من حد الإتقان."
+                                    suggestion="تدريب متدرج على الخطوات التي بقيت صعبة، مع تغذية راجعة فردية وتقييم جديد."
+                                else:
+                                    outcome="stagnant"; reason="لم يظهر تحسن موجب في المحاولة المختارة؛ لا يمكن الجزم بسبب الإخفاق من الدرجات وحدها."
+                                    suggestion="غيّر طريقة الشرح إلى نموذج محلول بصوت عالٍ، ثم نشاط ترتيب بطاقات الخطوات مع تغذية راجعة فورية."
+                                if history:
+                                    previous=[str(c.get("proposed_strategy",""))[:160] for c in history[:3]]
+                                    reason += " تمت مراجعة %s دورة محفوظة سابقة؛ راجع الاستراتيجيات السابقة لتجنب تكرارها." % len(history)
+                                else: previous=[]
+                                st.session_state["v6_analysis"]={"school_id":v6_school,"source_draft_id":selected,
+                                    "student_code":source["student_code"],"skill":source["skill"],"is_demo":bool(source.get("is_demo",True)),
+                                    "baseline_assessment_id":ids[0],"followup_assessment_id":ids[1],
+                                    "baseline_pct":round(before,2),"followup_pct":round(after,2),"threshold_pct":target,
+                                    "delta_pct_points":round(delta,2),"outcome":outcome,"decision_text":reason,
+                                    "proposed_strategy":suggestion,"memory_summary":" | ".join(previous),"created_by":v6_user}
+                            except Exception as exc:st.error("تعذر التحليل: "+str(exc)[:300])
+                        analysis=st.session_state.get("v6_analysis")
+                        if analysis and analysis.get("source_draft_id")==selected and analysis.get("school_id")==v6_school:
+                            st.write("**القبلي / البعدي / التغير:**",f'{analysis["baseline_pct"]}% / {analysis["followup_pct"]}% / {analysis["delta_pct_points"]:+.1f} نقطة')
+                            st.write("**تفسير القرار:**",analysis["decision_text"])
+                            st.write("**استراتيجية بديلة مقترحة:**",analysis["proposed_strategy"])
+                            st.warning("التحليل قائم على قواعد قابلة للتدقيق؛ ليس تشخيصًا لسبب ضعف الطالب، ولا دليلًا على أثر تعليمي حقيقي.")
+                            confirmed=st.checkbox("راجعت الأدلة وأوافق على حفظ الاقتراح للمراجعة البشرية فقط",key="v6_confirm")
+                            if st.button("💾 حفظ القرار والذاكرة وسجل التدقيق",disabled=not confirmed,key="v6_save"):
+                                try:
+                                    v6_client.table("mueen_agent_cycles").insert(analysis).execute()
+                                    st.session_state.pop("v6_analysis",None)
+                                    st.success("حُفظ تحليل الوكيل. حدّث الصفحة لعرض الذاكرة والمراجعة.")
+                                except Exception as exc:st.error("تعذر حفظ دورة الوكيل: "+str(exc)[:350])
+                    if old and v6_manager and old.get("review_status")=="pending":
+                        with st.expander("👨‍💼 مراجعة المدير للاقتراح",expanded=True):
+                            decision=st.radio("قرار المدير",["approved","rejected"],format_func=lambda x:"الموافقة على المقترح للمراجعة التعليمية" if x=="approved" else "رفض المقترح",key="v6_manager_decision")
+                            review_notes=st.text_area("مبررات القرار",key="v6_review_notes")
+                            if st.button("📝 تسجيل قرار المراجعة",key="v6_review_save"):
+                                try:
+                                    if len(review_notes.strip())<8:raise ValueError("اكتب مبررًا لا يقل عن 8 أحرف.")
+                                    v6_client.rpc("mueen_v6_review_cycle",{"p_cycle_id":str(old["id"]),"p_decision":decision,"p_notes":review_notes}).execute()
+                                    st.success("حُفظ قرار المراجعة؛ لا ينشئ هذا الإجراء خطة جديدة أو ينفذ تدخلًا.")
+                                except Exception as exc:st.error("تعذر حفظ قرار المدير: "+str(exc)[:350])
+                if v6_cycles:
+                    st.download_button("📥 تقرير ذاكرة الوكيل V6.0 (CSV)",pd.DataFrame(v6_cycles).to_csv(index=False).encode("utf-8-sig"),
+                        "MUEEN_V6_Agent_Memory.csv","text/csv",key="v6_export")
+            except Exception as exc:
+                st.error("تعذر تشغيل V6.0. نفذ ترحيل قاعدة البيانات أولًا: "+str(exc)[:350])
+
