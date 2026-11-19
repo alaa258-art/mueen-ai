@@ -1382,6 +1382,8 @@ if active_page == 0:
       <div class="mueen-pro-note">المراحل توضيحية؛ تنفيذها الفعلي ونتائجها يظهران في أقسام الوكيل والتقارير.</div>
     </section>
     """, unsafe_allow_html=True)
+    from mueen_agent_intelligence_center import render_agent_intelligence_center
+    render_agent_intelligence_center(get_supabase, get_selected_school_id)
 else:
     st.markdown("""
     <style>
