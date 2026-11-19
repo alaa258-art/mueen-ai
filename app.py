@@ -1278,6 +1278,51 @@ div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_6 button {
 </style>
 """, unsafe_allow_html=True)
 
+# V7.4: premium quick access typography and sidebar treatment.
+st.markdown("""
+<style>
+/* Scoped sidebar refinements; no changes to widget values or callbacks. */
+section[data-testid="stSidebar"] {
+  background:linear-gradient(180deg,#FFFFFF 0%,#F7FAFC 100%);
+  border-right:1px solid #E3EBF0;
+}
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] {
+  font-family:Tahoma,Arial,"Segoe UI",sans-serif!important;
+}
+.mueen-quick-head {
+  display:flex;flex-direction:row;align-items:center;gap:11px;
+  margin:6px 0 12px;padding:13px 11px;
+  background:linear-gradient(115deg,#F2F8FA,#FFFFFF);
+  border:1px solid #E1EBF0;border-radius:14px;
+  box-shadow:0 4px 13px rgba(16,36,58,.035);
+}
+.mueen-quick-icon {
+  width:39px;height:39px;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;background:#E1F1F2;border-radius:12px;font-size:20px;
+}
+.mueen-quick-title {
+  color:#12344C;font-weight:800;font-size:17px;line-height:1.6;
+}
+.mueen-quick-subtitle {
+  color:#697D8A;font-size:11px;line-height:1.8;
+}
+section[data-testid="stSidebar"] div[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+  border-radius:11px!important;border:1px solid #D5E1E7!important;
+  background:#FFFFFF!important;min-height:43px!important;
+  box-shadow:0 2px 5px rgba(16,36,58,.025);
+}
+section[data-testid="stSidebar"] div[data-testid="stSelectbox"] [data-baseweb="select"] > div:focus-within {
+  border-color:#087E8B!important;box-shadow:0 0 0 2px rgba(8,126,139,.10)!important;
+}
+section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
+  color:#243C50!important;font-size:13px!important;font-weight:700!important;
+}
+section[data-testid="stSidebar"] hr {border-color:#E2EAF0!important;margin:16px 0!important}
+</style>
+""", unsafe_allow_html=True)
+
 # V7.2: workspace visual enhancements only. No changes to agent, auth, or database.
 st.markdown("""
 <style>
@@ -2358,7 +2403,13 @@ def _mueen_sidebar_navigate():
 with st.sidebar:
     if st.session_state.get("mueen_sidebar_page") != st.session_state.get("mueen_active_page", 0):
         st.session_state["mueen_sidebar_page"] = st.session_state.get("mueen_active_page", 0)
-    st.markdown("### 🧭 الوصول السريع")
+    st.markdown("""
+    <div class="mueen-quick-head" dir="rtl">
+      <div class="mueen-quick-icon">🧭</div>
+      <div><div class="mueen-quick-title">الوصول السريع</div>
+      <div class="mueen-quick-subtitle">تنقّل بسهولة بين أقسام مُعين</div></div>
+    </div>
+    """, unsafe_allow_html=True)
     st.selectbox(
         "انتقل مباشرة إلى",
         options=list(range(len(nav_items))),
