@@ -1278,6 +1278,66 @@ div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_6 button {
 </style>
 """, unsafe_allow_html=True)
 
+# V7.2: workspace visual enhancements only. No changes to agent, auth, or database.
+st.markdown("""
+<style>
+/* A refined, consistent competition-ready visual system */
+:root {--mueen-ink:#10243A;--mueen-sea:#087E8B;--mueen-gold:#D9A441}
+.mueen-pro-hero {
+  position:relative;overflow:hidden;
+  background:linear-gradient(112deg,#10243A 0%,#16445A 52%,#087E8B 100%);
+  border-radius:20px;padding:27px 30px 29px;margin:8px 0 20px;
+  border-bottom:4px solid #D9A441;
+  box-shadow:0 13px 32px rgba(16,36,58,.13);
+}
+.mueen-pro-hero:before {content:"";position:absolute;width:230px;height:230px;
+  border-radius:50%;border:1px solid rgba(255,255,255,.12);left:-50px;top:-110px}
+.mueen-pro-hero h2 {color:#fff!important;font-size:clamp(24px,2.4vw,34px)!important;
+  margin:7px 0!important;font-weight:800}
+.mueen-pro-hero p {color:#E1F3F4!important;font-size:15px!important;
+  margin:0!important;line-height:1.85!important;max-width:900px}
+.mueen-pro-kicker {color:#F1C778;font-size:11px;font-weight:800;letter-spacing:1.1px}
+.st-key-mueen_nav_0 button,.st-key-mueen_nav_1 button,
+.st-key-mueen_nav_2 button,.st-key-mueen_nav_3 button,
+.st-key-mueen_nav_4 button,.st-key-mueen_nav_5 button,
+.st-key-mueen_nav_6 button {
+  min-height:88px!important;border-radius:17px!important;
+  box-shadow:0 8px 20px rgba(16,36,58,.10)!important;
+  border:1px solid rgba(255,255,255,.16)!important;
+  transition:transform .18s ease,box-shadow .18s ease!important;
+}
+.st-key-mueen_nav_0 button:hover,.st-key-mueen_nav_1 button:hover,
+.st-key-mueen_nav_2 button:hover,.st-key-mueen_nav_3 button:hover,
+.st-key-mueen_nav_4 button:hover,.st-key-mueen_nav_5 button:hover,
+.st-key-mueen_nav_6 button:hover {
+  transform:translateY(-3px)!important;
+  box-shadow:0 12px 25px rgba(16,36,58,.16)!important;
+}
+.mueen-pro-journey {margin:24px 0 10px;padding:22px 23px;
+  background:#fff;border:1px solid #DDE9ED;border-radius:18px;
+  box-shadow:0 6px 18px rgba(16,36,58,.04)}
+.mueen-pro-section-head h3 {margin:0 0 4px!important;color:#10243A!important;
+  font-size:22px!important}
+.mueen-pro-section-head p {margin:0 0 18px!important;color:#526779!important;
+  font-size:14px!important}
+.mueen-pro-steps {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+.mueen-pro-step {display:flex;flex-direction:column;gap:5px;position:relative;
+  background:linear-gradient(135deg,#F1F9FA,#F8FBFC);
+  border:1px solid #D8E9EC;border-radius:13px;padding:13px 14px;
+  min-height:94px}
+.mueen-pro-step b {font-size:12px;color:#087E8B;letter-spacing:1px}
+.mueen-pro-step strong {color:#17334A;font-size:15px}
+.mueen-pro-step small {color:#5B7280;font-size:12px}
+.mueen-pro-note {margin-top:14px;font-size:12px;color:#627887}
+@media(max-width:750px) {
+  .mueen-pro-hero {padding:20px 17px}
+  .mueen-pro-journey {padding:17px 13px}
+  .mueen-pro-steps {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:430px) {.mueen-pro-steps{grid-template-columns:1fr}}
+</style>
+""", unsafe_allow_html=True)
+
 st.session_state.setdefault("mueen_active_page", 0)
 nav_items = [
     ("🏠 الرئيسية", 0), ("📊 لوحة القيادة", 1),
@@ -1288,36 +1348,40 @@ nav_items = [
 # V6: البطاقات الكبيرة للرئيسية فقط، والتنقل المختصر للصفحات الداخلية.
 active_page = st.session_state["mueen_active_page"]
 if active_page == 0:
-    st.markdown("""<div class="mueen-v5-title"><h2>✨ مساحة عمل مُعين</h2>
-    <p>اختر القسم من البطاقات الملونة للانتقال مباشرة إلى أدواته.</p></div>""",
-    unsafe_allow_html=True)
+    st.markdown("""
+    <div class="mueen-pro-hero" dir="rtl">
+      <div class="mueen-pro-kicker">MUEEN AI · PROFESSIONAL COMPETITION EDITION</div>
+      <h2>✨ مساحة عمل مُعين الذكية</h2>
+      <p>من البيانات إلى قرارات تعليمية مدروسة — تحليل المهارات، تخطيط التدخل، وقياس الأثر تحت إشراف المعلم.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("#### 🧩 أدوات مساحة العمل")
+    # Preserve the original navigation callbacks and page identifiers.
     for row_items in (nav_items[:3], nav_items[3:6], nav_items[6:]):
-        cols = st.columns(3)
+        cols = st.columns(3, gap="medium")
         for col, (label, number) in zip(cols, row_items):
             with col:
                 if st.button(label, key=f"mueen_nav_{number}", use_container_width=True):
                     st.session_state["mueen_active_page"] = number
                     st.rerun()
-    st.caption("🏠 الصفحة الرئيسية · اختر بطاقة للانتقال إلى القسم المطلوب")
-    # V7 Competition: explanatory journey only; no new backend behavior.
+    st.caption("اختر القسم المناسب لدورك؛ القرارات التعليمية النهائية يراجعها المعلم.")
     st.markdown("""
-    <div dir="rtl" style="margin-top:1.25rem;padding:1.1rem 1.25rem;
-      border:1px solid #D5E4E8;border-radius:14px;background:#F7FBFC;color:#17324D">
-      <h3 style="margin:0 0 .5rem;color:#123B52">🧭 كيف يعمل وكيل مُعين الذكي؟</h3>
-      <p style="margin:0 0 .85rem">رحلة القرار التعليمي تحت إشراف المعلم:</p>
-      <div style="display:flex;flex-wrap:wrap;gap:.5rem;line-height:1.7">
-        <span style="padding:.4rem .65rem;background:#E4F2F3;border-radius:9px">١. تحليل التقييم</span>
-        <span style="padding:.4rem .65rem;background:#E4F2F3;border-radius:9px">٢. تحديد الأولويات</span>
-        <span style="padding:.4rem .65rem;background:#E4F2F3;border-radius:9px">٣. اقتراح التدخل</span>
-        <span style="padding:.4rem .65rem;background:#E4F2F3;border-radius:9px">٤. مراجعة المعلم</span>
-        <span style="padding:.4rem .65rem;background:#E4F2F3;border-radius:9px">٥. قياس الأثر</span>
-        <span style="padding:.4rem .65rem;background:#E4F2F3;border-radius:9px">٦. تحسين القرار</span>
+    <section class="mueen-pro-journey" dir="rtl" aria-label="رحلة عمل الوكيل الذكي">
+      <div class="mueen-pro-section-head">
+        <h3>🧭 دورة عمل وكيل مُعين الذكي</h3>
+        <p>رحلة القرار التعليمي — من التشخيص إلى التحسين المستمر</p>
       </div>
-      <p style="margin:.85rem 0 0;font-size:.85rem;color:#516678">
-        هذا مخطط توضيحي لمسار العمل، وليس مؤشرًا على إتمام دورة فعلية.</p>
-    </div>
+      <div class="mueen-pro-steps">
+        <div class="mueen-pro-step"><b>01</b><strong>تحليل التقييم</strong><small>قراءة مؤشرات المهارات</small></div>
+        <div class="mueen-pro-step"><b>02</b><strong>تحديد الأولويات</strong><small>تمييز فجوات التعلم</small></div>
+        <div class="mueen-pro-step"><b>03</b><strong>اقتراح التدخل</strong><small>خطة تعليمية قابلة للمراجعة</small></div>
+        <div class="mueen-pro-step"><b>04</b><strong>مراجعة المعلم</strong><small>القرار البشري أولًا</small></div>
+        <div class="mueen-pro-step"><b>05</b><strong>قياس الأثر</strong><small>مقارنة التقييمات</small></div>
+        <div class="mueen-pro-step"><b>06</b><strong>تحسين القرار</strong><small>الاستفادة من نتائج المتابعة</small></div>
+      </div>
+      <div class="mueen-pro-note">المراحل توضيحية؛ تنفيذها الفعلي ونتائجها يظهران في أقسام الوكيل والتقارير.</div>
+    </section>
     """, unsafe_allow_html=True)
-
 else:
     st.markdown("""
     <style>
@@ -2286,8 +2350,23 @@ with mueen_page(6):
                         st.error("تعذر عرض الهيكل الأكاديمي.")
                         st.caption(str(e)[:500])
 
+def _mueen_sidebar_navigate():
+    st.session_state["mueen_active_page"] = st.session_state["mueen_sidebar_page"]
+
 with st.sidebar:
-    st.header("إعدادات التحليل")
+    if st.session_state.get("mueen_sidebar_page") != st.session_state.get("mueen_active_page", 0):
+        st.session_state["mueen_sidebar_page"] = st.session_state.get("mueen_active_page", 0)
+    st.markdown("### 🧭 الوصول السريع")
+    st.selectbox(
+        "انتقل مباشرة إلى",
+        options=list(range(len(nav_items))),
+        index=int(st.session_state.get("mueen_active_page", 0)),
+        format_func=lambda page: nav_items[page][0],
+        key="mueen_sidebar_page",
+        on_change=_mueen_sidebar_navigate,
+    )
+    st.divider()
+    st.header("⚙️ إعدادات التحليل")
     subject=st.selectbox("المادة",["الحوسبة","الرياضيات","العلوم","اللغة العربية","اللغة الإنجليزية"])
     grade=st.selectbox("الصف",["الخامس","السادس","السابع","الثامن","التاسع"])
     threshold=st.slider("حد الإتقان (%)",50,100,80,5)
