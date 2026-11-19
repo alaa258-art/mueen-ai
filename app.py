@@ -1545,6 +1545,37 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# MUEEN AI — final presentation refinement; styling only, scoped to signed-in pages.
+st.markdown("""
+<style>
+/* Sidebar legibility, including navigation and advanced settings. */
+[data-testid="stSidebar"] {background:#F9FBFD!important;}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+[data-testid="stSidebar"] [data-testid="stSelectbox"] div[data-baseweb="select"] {
+  font-size:16px!important;line-height:1.75!important;
+}
+[data-testid="stSidebar"] h3 {font-size:20px!important;line-height:1.5!important;}
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {font-size:14px!important;line-height:1.7!important;}
+/* Three-tone palette for the home navigation; secondary pages retain their compact controls. */
+.st-key-mueen_nav_0 button,.st-key-mueen_nav_3 button {background:#10283F!important;}
+.st-key-mueen_nav_1 button,.st-key-mueen_nav_2 button,
+.st-key-mueen_nav_5 button,.st-key-mueen_nav_6 button {background:#087F8C!important;}
+.st-key-mueen_nav_4 button,.st-key-mueen_nav_7 button {background:#99621E!important;}
+[class*="st-key-mueen_nav_"] button {
+  color:#FFF!important;border:1px solid transparent!important;
+  font-size:17px!important;line-height:1.55!important;
+}
+[class*="st-key-mueen_nav_"] button:focus-visible {
+  outline:3px solid #D9A441!important;outline-offset:3px!important;
+}
+/* The heading is a hero; keep it readable against the dark background. */
+.mueen-v5-title h2 {color:#FFF!important;font-size:clamp(24px,2.1vw,31px)!important;}
+.mueen-v5-title p {color:#F0F9FA!important;font-size:16px!important;line-height:1.8!important;}
+@media(max-width:760px){[class*="st-key-mueen_nav_"] button{font-size:15px!important;}}
+</style>
+""", unsafe_allow_html=True)
+
 # واجهة مبنية على الدور: البطاقات في الرئيسية فقط، وتنقل مختصر في الداخل.
 st.session_state.setdefault("mueen_active_page", 0)
 role = str(st.session_state.get("mueen_school_role", "")).lower()
@@ -1567,7 +1598,7 @@ if st.session_state["mueen_active_page"] not in allowed_pages:
 active_page = st.session_state["mueen_active_page"]
 if active_page == 0:
     st.markdown("""<div class="mueen-v5-title"><h2>✨ مساحة عمل مُعين</h2>
-    <p>اختر مهمتك للانتقال مباشرة إلى أدواتها.</p></div>""", unsafe_allow_html=True)
+    <p>من البيانات إلى القرار التعليمي: تابع مؤشرات التعلم، وحدد المهارات التي تحتاج دعمًا، وراجع خطط التدخل ونتائج المتابعة.</p></div>""", unsafe_allow_html=True)
     st.caption("المهام المتاحة بحسب صلاحيات حسابك في المدرسة النشطة")
     for offset in range(0, len(nav_items), 3):
         cols = st.columns(3, gap="medium")
@@ -1629,7 +1660,7 @@ if active_page == 6 and can_manage_school:
         st.info("إدارة دعوات المعلمين والعضويات متاحة لمدير المدرسة فقط.")
 
 with mueen_page(0):
-    st.info("مرحبًا بك في مُعين. اختر إحدى البطاقات الملونة أعلاه لفتح القسم المطلوب.")
+    st.info("مرحبًا بك في مُعين AI. اختر القسم المناسب لدورك لبدء العمل؛ تبقى القرارات التعليمية النهائية بيد المعلم والقيادة المدرسية.")
 
 
 with mueen_page(7):
