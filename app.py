@@ -1299,6 +1299,25 @@ if active_page == 0:
                     st.session_state["mueen_active_page"] = number
                     st.rerun()
     st.caption("🏠 الصفحة الرئيسية · اختر بطاقة للانتقال إلى القسم المطلوب")
+    # V7 Competition: explanatory journey only; no new backend behavior.
+    st.markdown("""
+    <div dir="rtl" style="margin-top:1.25rem;padding:1.1rem 1.25rem;
+      border:1px solid #D5E4E8;border-radius:14px;background:#F7FBFC;color:#17324D">
+      <h3 style="margin:0 0 .5rem;color:#123B52">🧭 كيف يعمل وكيل مُعين الذكي؟</h3>
+      <p style="margin:0 0 .85rem">رحلة القرار التعليمي تحت إشراف المعلم:</p>
+      <div style="display:flex;flex-wrap:wrap;gap:.5rem;line-height:1.7">
+        <span style="padding:.4rem .65rem;background:#E4F2F3;border-radius:9px">١. تحليل التقييم</span>
+        <span style="padding:.4rem .65rem;background:#E4F2F3;border-radius:9px">٢. تحديد الأولويات</span>
+        <span style="padding:.4rem .65rem;background:#E4F2F3;border-radius:9px">٣. اقتراح التدخل</span>
+        <span style="padding:.4rem .65rem;background:#E4F2F3;border-radius:9px">٤. مراجعة المعلم</span>
+        <span style="padding:.4rem .65rem;background:#E4F2F3;border-radius:9px">٥. قياس الأثر</span>
+        <span style="padding:.4rem .65rem;background:#E4F2F3;border-radius:9px">٦. تحسين القرار</span>
+      </div>
+      <p style="margin:.85rem 0 0;font-size:.85rem;color:#516678">
+        هذا مخطط توضيحي لمسار العمل، وليس مؤشرًا على إتمام دورة فعلية.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
 else:
     st.markdown("""
     <style>
