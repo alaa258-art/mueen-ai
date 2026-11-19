@@ -1563,6 +1563,24 @@ else:
                     st.session_state["mueen_active_page"] = number
                     st.rerun()
 
+# تنقل موحد في الشريط الجانبي، متاح من جميع الصفحات بعد تسجيل الدخول.
+def mueen_go_to_sidebar_page():
+    destination = st.session_state.get("mueen_sidebar_destination")
+    if destination in allowed_pages:
+        st.session_state["mueen_active_page"] = destination
+
+with st.sidebar:
+    st.markdown("### 🧭 الوصول السريع")
+    st.selectbox(
+        "انتقل مباشرة إلى",
+        options=[number for _, number in nav_items],
+        format_func=lambda number: next(label for label, item_number in nav_items if item_number == number),
+        index=[number for _, number in nav_items].index(active_page),
+        key="mueen_sidebar_destination",
+        on_change=mueen_go_to_sidebar_page,
+    )
+    st.caption("الصفحة الحالية: " + next(label for label, number in nav_items if number == active_page))
+
 # لا تُعرض واجهة العضويات إلا في صفحة الإدارة وبالدور المصرح له.
 if active_page == 6 and can_manage_school:
     st.markdown("## 🏫 إدارة المدرسة")
@@ -2499,25 +2517,36 @@ with mueen_page(6):
                         st.caption(str(e)[:500])
 
 with st.sidebar:
-    st.header("إعدادات التحليل")
-    subject=st.selectbox("المادة",["الحوسبة","الرياضيات","العلوم","اللغة العربية","اللغة الإنجليزية"])
-    grade=st.selectbox("الصف",["الخامس","السادس","السابع","الثامن","التاسع"])
-    threshold=st.slider("حد الإتقان (%)",50,100,80,5)
-    output_language = st.selectbox(
-    "لغة المخرجات" if st.session_state.get("mueen_language", "العربية") == "العربية"
-    else "Output Language",
-    ["العربية", "English"],
-    key="mueen_output_language"
-)
-    model=st.text_input("اسم نموذج API",value="gpt-4.1-mini")
-key=get_key()
-db_client=get_supabase()
-if db_client:
-    st.sidebar.success("قاعدة بيانات Supabase متصلة")
-else:
-    st.sidebar.warning("تعذر الاتصال بقاعدة البيانات عبر جلسة المستخدم. تحقق من SUPABASE_URL وSUPABASE_PUBLISHABLE_KEY.")
-if key: st.sidebar.success("ميزات الذكاء الاصطناعي جاهزة")
-else: st.sidebar.info("أضف OPENAI_API_KEY إلى Streamlit Secrets لتفعيل الذكاء الاصطناعي.")
+    st.divider()
+    st.markdown("### ⚙️ إعدادات التحليل")
+    st.caption("الإعدادات الأساسية متاحة دائمًا؛ الخيارات المتقدمة عند الحاجة.")
+    subject = st.selectbox(
+        "المادة", ["الحوسبة", "الرياضيات", "العلوم", "اللغة العربية", "اللغة الإنجليزية"],
+        key="mueen_analysis_subject",
+    )
+    grade = st.selectbox(
+        "الصف", ["الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر", "الحادي عشر", "الثاني عشر"],
+        key="mueen_analysis_grade",
+    )
+    threshold = st.slider("حد الإتقان (%)", 50, 100, 80, 5, key="mueen_analysis_threshold")
+    with st.expander("🌐 اللغة والنموذج — خيارات متقدمة", expanded=False):
+        output_language = st.selectbox(
+            "لغة المخرجات" if st.session_state.get("mueen_language", "العربية") == "العربية" else "Output Language",
+            ["العربية", "English"],
+            key="mueen_output_language",
+        )
+        model = st.text_input("اسم نموذج API", value="gpt-4.1-mini", key="mueen_analysis_model")
+    with st.expander("🔌 حالة الخدمات", expanded=False):
+        key = get_key()
+        db_client = get_supabase()
+        if db_client:
+            st.success("قاعدة بيانات Supabase متصلة")
+        else:
+            st.warning("تعذر الاتصال بقاعدة البيانات عبر جلسة المستخدم. تحقق من إعدادات الاتصال.")
+        if key:
+            st.success("ميزات الذكاء الاصطناعي جاهزة")
+        else:
+            st.info("أضف OPENAI_API_KEY إلى Streamlit Secrets لتفعيل الذكاء الاصطناعي.")
 
 
 with mueen_page(1):
