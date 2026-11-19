@@ -1506,6 +1506,45 @@ div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_6 button {
 </style>
 """, unsafe_allow_html=True)
 
+# MUEEN AI — presentation polish, CSS only (no database, role, or workflow changes)
+st.markdown("""
+<style>
+:root {--mueen-navy:#10283F;--mueen-teal:#087F8C;--mueen-gold:#D9A441;--mueen-paper:#F3F6FA;}
+/* Use available system Arabic fonts: no remote font download required. */
+.stApp, .stApp button, .stApp input, .stApp textarea, .stApp select {
+ font-family: "Tajawal", "Cairo", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+}
+.stApp {background:#F3F6FA;}
+[data-testid="stMain"] h1,[data-testid="stMain"] h2,[data-testid="stMain"] h3 {
+ letter-spacing:0;line-height:1.45;color:#10283F;
+}
+[data-testid="stSidebar"] {background:#FAFBFD;border-right:1px solid #E1E8F0;}
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {font-size:15px!important;line-height:1.65!important;}
+[data-testid="stSidebar"] button {font-size:14px!important;min-height:39px;}
+[data-testid="stMetric"] {border:1px solid #DEE8F0;border-radius:16px;box-shadow:0 4px 14px rgba(16,40,63,.055);}
+[data-testid="stMetricValue"] {font-size:clamp(24px,2vw,33px)!important;color:#10283F;font-weight:750;}
+[data-testid="stMetricLabel"] {font-size:14px!important;line-height:1.5;}
+[data-testid="stAlert"] {border-radius:12px;}
+[data-testid="stExpander"] {border:1px solid #DFE8F0;border-radius:12px;overflow:hidden;background:#FFF;}
+[data-testid="stExpander"] summary {font-weight:650;}
+[data-testid="stTabs"] [data-baseweb="tab-list"] {gap:6px;flex-wrap:wrap;border-bottom:1px solid #DDE6EF;padding-bottom:7px;}
+[data-testid="stTabs"] button[role="tab"] {font-size:15px!important;font-weight:700!important;min-height:46px;padding:9px 13px;border-radius:10px 10px 0 0;white-space:normal;}
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {color:#087F8C!important;background:#EAF5F6;border-bottom:3px solid #087F8C;}
+[data-testid="stTabs"] [data-baseweb="tab-panel"] {padding-top:12px;}
+[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea,[data-testid="stSelectbox"]>div {border-radius:10px;}
+.stButton>button,.stDownloadButton>button {border-radius:11px;transition:background-color .15s ease,border-color .15s ease;}
+.stButton>button:focus-visible,.stDownloadButton>button:focus-visible,[role="tab"]:focus-visible {outline:3px solid #D9A441!important;outline-offset:2px;}
+.mueen-v3-head,.mueen-v5-title {box-shadow:0 5px 18px rgba(16,40,63,.10);}
+/* Keep navigation color meaningful and consistent across pages. */
+.st-key-mueen_nav_0 button,.st-key-mueen_nav_1 button,.st-key-mueen_nav_2 button,
+.st-key-mueen_nav_3 button,.st-key-mueen_nav_4 button,.st-key-mueen_nav_5 button,
+.st-key-mueen_nav_6 button {background:#10283F!important;color:#FFF!important;}
+.st-key-mueen_nav_1 button,.st-key-mueen_nav_5 button {background:#087F8C!important;}
+@media(max-width:900px){[data-testid="stTabs"] button[role="tab"] {font-size:13px!important;padding:7px 9px;}}
+@media(prefers-reduced-motion:reduce){.stButton>button,.stDownloadButton>button {transition:none!important;}}
+</style>
+""", unsafe_allow_html=True)
+
 # واجهة مبنية على الدور: البطاقات في الرئيسية فقط، وتنقل مختصر في الداخل.
 st.session_state.setdefault("mueen_active_page", 0)
 role = str(st.session_state.get("mueen_school_role", "")).lower()
