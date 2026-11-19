@@ -3641,496 +3641,504 @@ with mueen_page(5):
      {"Student":"طالب 3","Skill":"ترتيب خطوات الحل","Score":1,"MaxScore":5},
      {"Student":"طالب 3","Skill":"قراءة المخطط الانسيابي","Score":2,"MaxScore":5},
     ])
-    st.markdown("### 1) بيانات التقييم القبلي")
-    st.write("أعمدة CSV المطلوبة: `Student`, `Skill`, `Score`, `MaxScore`.")
-    uploaded=st.file_uploader("ارفع ملف CSV",type=["csv"])
-    use_demo=st.checkbox("استخدام البيانات النموذجية",value=True)
-    data=None
-    if uploaded is not None:
-        try: data=pd.read_csv(uploaded)
-        except Exception as e: st.error(f"تعذر قراءة الملف: {e}")
-    elif use_demo: data=demo.copy()
-    if data is not None:
-        required={"Student","Skill","Score","MaxScore"}
-        if not required.issubset(data.columns): st.error("الأعمدة المطلوبة: Student, Skill, Score, MaxScore"); data=None
-        else:
-            data=data.copy(); data["Score"]=pd.to_numeric(data["Score"],errors="coerce"); data["MaxScore"]=pd.to_numeric(data["MaxScore"],errors="coerce")
-            data=data.dropna(subset=["Student","Skill","Score","MaxScore"])
-            data=data[(data["MaxScore"]>0)&(data["Score"]>=0)&(data["Score"]<=data["MaxScore"])]
-    if data is not None and not data.empty:
-        st.dataframe(data,use_container_width=True,hide_index=True)
-        data["MasteryPct"]=(data["Score"]/data["MaxScore"]*100).round(1)
-        summary=data.groupby("Skill",as_index=False).agg(AverageMastery=("MasteryPct","mean"),Responses=("Student","count"))
-        summary["AverageMastery"]=summary["AverageMastery"].round(1)
-        summary["Status"]=summary["AverageMastery"].apply(lambda x:"متقنة مبدئيًا" if x>=threshold else "تحتاج إلى دعم")
-        st.markdown("### 2) تحليل المهارات وتحديد الأولوية")
-        view=summary.rename(columns={"Skill":"المهارة","AverageMastery":"متوسط الإتقان (%)","Responses":"عدد الإجابات","Status":"الحالة"})
-        st.dataframe(view,use_container_width=True,hide_index=True)
+    st.markdown("### 📚 رحلة المعلم | الخطط والاختبارات")
+    st.caption("انتقل بين المراحل من التبويبات. تبقى المدخلات والمخرجات في جلسة العمل أثناء التنقل.")
+    teacher_tabs = st.tabs(["📝 التقييم القبلي", "📊 تحليل المهارات", "🎯 الخطة العلاجية", "✅ التقييم البعدي", "📈 النتائج والمتابعة"])
+    with teacher_tabs[0]:
+        st.markdown("### 1) بيانات التقييم القبلي")
+        st.write("أعمدة CSV المطلوبة: `Student`, `Skill`, `Score`, `MaxScore`.")
+        uploaded=st.file_uploader("ارفع ملف CSV",type=["csv"])
+        use_demo=st.checkbox("استخدام البيانات النموذجية",value=True)
+        data=None
+        if uploaded is not None:
+            try: data=pd.read_csv(uploaded)
+            except Exception as e: st.error(f"تعذر قراءة الملف: {e}")
+        elif use_demo: data=demo.copy()
+        if data is not None:
+            required={"Student","Skill","Score","MaxScore"}
+            if not required.issubset(data.columns): st.error("الأعمدة المطلوبة: Student, Skill, Score, MaxScore"); data=None
+            else:
+                data=data.copy(); data["Score"]=pd.to_numeric(data["Score"],errors="coerce"); data["MaxScore"]=pd.to_numeric(data["MaxScore"],errors="coerce")
+                data=data.dropna(subset=["Student","Skill","Score","MaxScore"])
+                data=data[(data["MaxScore"]>0)&(data["Score"]>=0)&(data["Score"]<=data["MaxScore"])]
+        if data is not None and not data.empty:
+            st.dataframe(data,use_container_width=True,hide_index=True)
+            data["MasteryPct"]=(data["Score"]/data["MaxScore"]*100).round(1)
+            summary=data.groupby("Skill",as_index=False).agg(AverageMastery=("MasteryPct","mean"),Responses=("Student","count"))
+            summary["AverageMastery"]=summary["AverageMastery"].round(1)
+            summary["Status"]=summary["AverageMastery"].apply(lambda x:"متقنة مبدئيًا" if x>=threshold else "تحتاج إلى دعم")
+        with teacher_tabs[1]:
+            st.markdown("### 2) تحليل المهارات وتحديد الأولوية")
+            view=summary.rename(columns={"Skill":"المهارة","AverageMastery":"متوسط الإتقان (%)","Responses":"عدد الإجابات","Status":"الحالة"})
+            st.dataframe(view,use_container_width=True,hide_index=True)
     
-        st.markdown("### 2.1) إعداد سجل المجموعة")
-        # القيمة الافتراضية، وتُستبدل باختيار الهيكل الأكاديمي عند توفره.
-        plan_subject = subject
-        plan_grade = grade
+            st.markdown("### 2.1) إعداد سجل المجموعة")
+            # القيمة الافتراضية، وتُستبدل باختيار الهيكل الأكاديمي عند توفره.
+            plan_subject = subject
+            plan_grade = grade
 
-        academic_client = get_supabase()
-        academic_school_id = get_selected_school_id()
+            academic_client = get_supabase()
+            academic_school_id = get_selected_school_id()
 
-        if academic_client is None or not academic_school_id:
-            st.error("تعذر الاتصال بالمدرسة المحددة. سجّل الدخول مجددًا.")
-        else:
-            try:
-                # تحميل الشعب التابعة للمدرسة المحددة
-                sections_response = (
-                    academic_client.table("academic_sections")
-                    .select(
-                        "id,grade_level,cycle,track,section_name,academic_year"
-                    )
-                    .eq("school_id", academic_school_id)
-                    .order("grade_level")
-                    .order("section_name")
-                    .execute()
-                )
-                academic_sections = sections_response.data or []
-
-                if not academic_sections:
-                    st.warning("لا توجد شعب مسجلة في الهيكل الأكاديمي لهذه المدرسة.")
-                else:
-                    section_options = {}
-                    for item in academic_sections:
-                        label = (
-                            f"الصف {item['grade_level']} - "
-                            f"الشعبة {item['section_name']} - "
-                            f"{item['academic_year']}"
+            if academic_client is None or not academic_school_id:
+                st.error("تعذر الاتصال بالمدرسة المحددة. سجّل الدخول مجددًا.")
+            else:
+                try:
+                    # تحميل الشعب التابعة للمدرسة المحددة
+                    sections_response = (
+                        academic_client.table("academic_sections")
+                        .select(
+                            "id,grade_level,cycle,track,section_name,academic_year"
                         )
-                        section_options[label] = item
-
-                    selected_section_label = st.selectbox(
-                        "الصف والشعبة",
-                        list(section_options.keys()),
-                        key="assessment_academic_section",
-                    )
-                    selected_section = section_options[selected_section_label]
-
-                    # تحميل المواد المرتبطة بالشعبة المختارة فقط
-                    links_response = (
-                        academic_client.table("section_subjects")
-                        .select("subject_id")
                         .eq("school_id", academic_school_id)
-                        .eq("section_id", selected_section["id"])
+                        .order("grade_level")
+                        .order("section_name")
                         .execute()
                     )
-                    linked_subject_ids = [
-                        item["subject_id"]
-                        for item in (links_response.data or [])
-                    ]
+                    academic_sections = sections_response.data or []
 
-                    linked_subjects = []
-                    if linked_subject_ids:
-                        subjects_response = (
-                            academic_client.table("academic_subjects")
-                            .select(
-                                "id,subject_name,grade_level,track,academic_year"
+                    if not academic_sections:
+                        st.warning("لا توجد شعب مسجلة في الهيكل الأكاديمي لهذه المدرسة.")
+                    else:
+                        section_options = {}
+                        for item in academic_sections:
+                            label = (
+                                f"الصف {item['grade_level']} - "
+                                f"الشعبة {item['section_name']} - "
+                                f"{item['academic_year']}"
                             )
+                            section_options[label] = item
+
+                        selected_section_label = st.selectbox(
+                            "الصف والشعبة",
+                            list(section_options.keys()),
+                            key="assessment_academic_section",
+                        )
+                        selected_section = section_options[selected_section_label]
+
+                        # تحميل المواد المرتبطة بالشعبة المختارة فقط
+                        links_response = (
+                            academic_client.table("section_subjects")
+                            .select("subject_id")
                             .eq("school_id", academic_school_id)
-                            .eq("grade_level", selected_section["grade_level"])
-                            .eq("track", selected_section["track"])
-                            .eq("academic_year", selected_section["academic_year"])
+                            .eq("section_id", selected_section["id"])
                             .execute()
                         )
-                        linked_subjects = [
-                            subject
-                            for subject in (subjects_response.data or [])
-                            if subject["id"] in linked_subject_ids
+                        linked_subject_ids = [
+                            item["subject_id"]
+                            for item in (links_response.data or [])
                         ]
 
-                    if not linked_subjects:
-                        st.warning("لا توجد مواد مرتبطة بهذه الشعبة. أضف الربط من إدارة الهيكل الأكاديمي.")
-                    else:
-                        subject_options = {
-                            subject["subject_name"]: subject
-                            for subject in linked_subjects
-                        }
-                        selected_subject_name = st.selectbox(
-                            "المادة",
-                            list(subject_options.keys()),
-                            key="assessment_academic_subject",
-                        )
-                        selected_subject = subject_options[selected_subject_name]
-                        plan_subject = selected_subject_name
-                        plan_grade = str(selected_section["grade_level"])
-
-                        student_code = st.text_input(
-                            "رمز الطالب/المجموعة (مجهول الهوية)",
-                            value="DEMO-GROUP",
-                            help="استخدم رمزًا مستعارًا، ولا تكتب اسم الطالب.",
-                        )
-
-                        if st.button(
-                            "💾 حفظ نتائج التقييم القبلي في Supabase",
-                            use_container_width=True,
-                        ):
-                            if not student_code.strip():
-                                st.error("أدخل رمزًا مجهول الهوية للطالب أو المجموعة.")
-                            else:
-                                save_student(
-                                    student_code.strip(),
-                                    str(selected_section["grade_level"]),
-                                    str(selected_section["section_name"]),
+                        linked_subjects = []
+                        if linked_subject_ids:
+                            subjects_response = (
+                                academic_client.table("academic_subjects")
+                                .select(
+                                    "id,subject_name,grade_level,track,academic_year"
                                 )
+                                .eq("school_id", academic_school_id)
+                                .eq("grade_level", selected_section["grade_level"])
+                                .eq("track", selected_section["track"])
+                                .eq("academic_year", selected_section["academic_year"])
+                                .execute()
+                            )
+                            linked_subjects = [
+                                subject
+                                for subject in (subjects_response.data or [])
+                                if subject["id"] in linked_subject_ids
+                            ]
 
-                                records = [{
-                                    "student_code": student_code.strip(),
-                                    "skill": str(row["Skill"]),
-                                    "assessment_type": "baseline",
-                                    "score": float(row["AverageMastery"]),
-                                    "max_score": 100.0,
-                                    "recommendation": (
-                                        "متوسط الإتقان القبلي للمجموعة؛ الحالة: "
-                                        + str(row["Status"])
-                                    ),
-                                    "section_id": selected_section["id"],
-                                    "subject_id": selected_subject["id"],
-                                } for _, row in summary.iterrows()]
-
-                                save_assessment_records(records)
-                                st.success(
-                                    f"تم حفظ {len(records)} سجلًا قبليًا بنجاح."
-                                )
-
-            except Exception as e:
-                st.error("تعذر تحميل الهيكل الأكاديمي أو حفظ النتائج.")
-                st.caption(str(e)[:500])
-
-        weak=summary[summary["AverageMastery"]<threshold]["Skill"].tolist(); options=weak or summary["Skill"].tolist()
-        skill=st.selectbox("اختر المهارة المستهدفة",options)
-        mastery=float(summary.loc[summary["Skill"]==skill,"AverageMastery"].iloc[0])
-        st.metric("متوسط الإتقان القبلي للمهارة",f"{mastery:.1f}%")
-        notes=st.text_area("ملاحظات المعلم (اختياري)",placeholder="مثال: يحتاج بعض الطلاب إلى مثال بصري لترتيب الخطوات.")
-        group=st.selectbox("الفئة المستهدفة",["مجموعة دعم","مجموعة الصف","مجموعة إثراء"])
-        # MUEEN V5 — دورة تدخل ذكي من بيانات التقييم الحالية، دون حفظ تلقائي.
-        st.markdown("### 🚀 دورة التدخل الذكي | MUEEN Agent")
-        st.caption("يشخّص المهارة الأضعف ويُنشئ الخطة والاختبار للمراجعة؛ لا تُرسل أسماء الطلاب إلى النموذج.")
-        agent_weak = summary.sort_values(["AverageMastery", "Skill"], ascending=[True, True]).iloc[0]
-        agent_skill = str(agent_weak["Skill"])
-        agent_mastery = float(agent_weak["AverageMastery"])
-        st.info(
-            f"🔎 الأولوية المقترحة: {agent_skill} — متوسط الإتقان {agent_mastery:.1f}% "
-            f"(حد الإتقان {threshold}%)."
-        )
-        current_section_id = selected_section["id"] if "selected_section" in locals() and "selected_subject" in locals() and linked_subjects else None
-        current_subject_id = selected_subject["id"] if current_section_id else None
-        current_skill_id = None
-        if current_subject_id and academic_client is not None:
-            try:
-                skill_rows = (academic_client.table("learning_skills")
-                              .select("id,skill_name")
-                              .eq("school_id", academic_school_id)
-                              .eq("subject_id", current_subject_id)
-                              .eq("skill_name", agent_skill).limit(1).execute().data or [])
-                current_skill_id = skill_rows[0]["id"] if skill_rows else None
-            except Exception:
-                pass
-        if st.button("🚀 ابدأ دورة التدخل الذكي", key="mueen_agent_start", use_container_width=True):
-            if agent_mastery >= threshold:
-                st.warning("جميع المهارات بلغت حد الإتقان؛ لا توجد مهارة متعثرة تستدعي تدخلًا علاجيًا وفق هذه البيانات.")
-            elif not get_key():
-                st.error("مفتاح OpenAI غير متاح؛ تعذّر بدء الدورة.")
-            else:
-                # لا نحتفظ بمخرجات دورة قديمة إذا فشل إنشاء إحدى المرحلتين.
-                st.session_state.pop("mueen_agent_cycle", None)
-                st.session_state.pop("mueen_agent_decision", None)
-                st.session_state.pop("mueen_v5_saved_plan", None)
-                try:
-                    with st.spinner("الوكيل يحلل الأولوية وينشئ الخطة واختبار المتابعة..."):
-                        agent_plan = create_plan(
-                            model, plan_subject, plan_grade, agent_skill,
-                            agent_mastery, output_language, notes, group, threshold
-                        )
-                        agent_quiz = create_quiz(
-                            model, plan_subject, plan_grade, agent_skill, output_language
-                        )
-                    st.session_state["mueen_agent_cycle"] = {
-                        "school_id": get_selected_school_id(),
-                        "subject": plan_subject, "grade": plan_grade,
-                        "skill": agent_skill, "before": agent_mastery,
-                        "threshold": threshold, "plan": agent_plan,
-                        "quiz": agent_quiz, "language": output_language,
-                        "created_at": datetime.now().isoformat(),
-                        "section_id": current_section_id,
-                        "subject_id": current_subject_id,
-                        "skill_id": current_skill_id,
-                        "source_demo": uploaded is None and use_demo,
-                        "baseline_rows": data[["Student", "Skill", "Score", "MaxScore"]].to_dict("records"),
-                    }
-                    st.session_state["last_plan"] = agent_plan
-                    st.session_state["last_skill"] = agent_skill
-                    st.session_state["last_quiz"] = agent_quiz
-                    st.session_state["quiz_skill"] = agent_skill
-                    st.success("اكتملت مرحلتا التخطيط وإعداد الاختبار. راجع المخرجات قبل استخدامها.")
-                except Exception as e:
-                    st.error("لم تكتمل الدورة؛ لم تُحفظ أي سجلات في قاعدة البيانات.")
-                    st.caption(str(e)[:500])
-        agent_cycle = st.session_state.get("mueen_agent_cycle")
-        if agent_cycle and agent_cycle.get("school_id") == get_selected_school_id():
-            st.markdown("#### 🧠 ملخص دورة التدخل الذكي")
-            st.write(
-                f"**المادة:** {agent_cycle['subject']} | **الصف:** {agent_cycle['grade']} | "
-                f"**المهارة:** {agent_cycle['skill']} | "
-                f"**القبلي:** {agent_cycle['before']:.1f}% | "
-                f"**المستهدف:** {agent_cycle['threshold']}%"
-            )
-            st.caption("المرحلة الحالية: بانتظار تطبيق النشاط وإدخال نتيجة اختبار المتابعة بواسطة المعلم.")
-            with st.expander("📘 عرض الخطة التي أنشأها الوكيل"):
-                st.markdown(agent_cycle["plan"])
-            with st.expander("📝 عرض اختبار المتابعة ومفتاح الإجابة"):
-                st.markdown(agent_cycle["quiz"])
-            st.download_button("📥 تنزيل خطة الوكيل", agent_cycle["plan"], "mueen_agent_plan.txt", key="mueen_agent_plan_download")
-            st.download_button("📥 تنزيل اختبار الوكيل", agent_cycle["quiz"], "mueen_agent_quiz.txt", key="mueen_agent_quiz_download")
-            agent_after = st.number_input(
-                "نتيجة التقييم البعدي للدورة (%) — بعد تطبيق الاختبار",
-                min_value=0.0, max_value=100.0, value=0.0, step=1.0,
-                key="mueen_agent_after"
-            )
-            if st.button("📊 تحليل نتيجة الدورة واقتراح الخطوة التالية", key="mueen_agent_decide"):
-                agent_recommendation, agent_delta = decide(
-                    agent_cycle["before"], agent_after, agent_cycle["threshold"]
-                )
-                st.session_state["mueen_agent_decision"] = {
-                    "school_id": agent_cycle["school_id"],
-                    "cycle_id": agent_cycle["created_at"],
-                    "skill": agent_cycle["skill"], "before": agent_cycle["before"],
-                    "after": agent_after, "delta": agent_delta,
-                    "recommendation": agent_recommendation,
-                }
-            agent_decision = st.session_state.get("mueen_agent_decision")
-            if (agent_decision and agent_decision.get("cycle_id") == agent_cycle["created_at"]
-                    and agent_decision["school_id"] == agent_cycle["school_id"]
-                    and agent_decision["skill"] == agent_cycle["skill"]
-                    and agent_decision["before"] == agent_cycle["before"]):
-                st.metric("التغير في الإتقان", f"{agent_decision['delta']:+.1f} نقطة مئوية")
-                st.info(agent_decision["recommendation"])
-                st.caption("هذه توصية مبدئية وليست قرارًا نهائيًا؛ لا يتم حفظ النتيجة تلقائيًا.")
-
-        # V5 — التحقق من جودة مخرجات الوكيل، ثم حفظها في الجداول الـ16 القائمة.
-        if agent_cycle and agent_cycle.get("school_id") == get_selected_school_id():
-            st.markdown("### 🧩 MUEEN V5 | الذاكرة والمتابعة والتوسع")
-            if agent_cycle.get("source_demo"):
-                st.warning("هذه الدورة مستمدة من بيانات نموذجية. يمكن استعراضها، لكن لا يجوز حفظها كدليل على تحسن طلاب حقيقيين.")
-            plan_text = agent_cycle["plan"]
-            quiz_text = agent_cycle["quiz"]
-            required_titles = (["Interpretation", "Measurable objective", "Worked example", "10-minute activity", "Follow-up questions"]
-                               if agent_cycle["language"] == "English" else
-                               ["تفسير النتيجة", "الهدف القابل للقياس", "المثال المحلول", "النشاط العلاجي", "أسئلة المتابعة"])
-            missing_titles = [title for title in required_titles if title not in plan_text]
-            quiz_valid = len(quiz_text.strip()) >= 100
-            if missing_titles or not quiz_valid:
-                st.error("فحص المخرجات: بعض عناصر الخطة أو الاختبار ناقصة. أعد إنشاء الدورة قبل اعتمادها.")
-                if missing_titles:
-                    st.caption("عناوين ناقصة: " + "، ".join(missing_titles))
-            else:
-                st.success("اجتازت المخرجات فحص البنية الأولي. ما زالت الدقة العلمية ومفتاح الإجابة بحاجة لمراجعة المعلم.")
-            role_v5 = str(st.session_state.get("mueen_school_role", "")).lower()
-            can_manage_v5 = role_v5 in ("principal", "coordinator")
-            if can_manage_v5:
-                try:
-                    prior = mueen_v5_prior_interventions(agent_cycle["school_id"], agent_cycle.get("subject_id"), agent_cycle.get("skill_id"))
-                    with st.expander("🧠 ذاكرة الوكيل: تدخلات سابقة في المدرسة", expanded=False):
-                        if prior:
-                            st.dataframe(pd.DataFrame(prior), use_container_width=True, hide_index=True)
+                        if not linked_subjects:
+                            st.warning("لا توجد مواد مرتبطة بهذه الشعبة. أضف الربط من إدارة الهيكل الأكاديمي.")
                         else:
-                            st.info("لا توجد تدخلات سابقة مرئية لهذا النطاق.")
-                except Exception as exc:
-                    st.warning("تعذر قراءة ذاكرة التدخلات وفق الصلاحيات الحالية.")
-                    st.caption(str(exc)[:250])
-            else:
-                st.info("صلاحيات قاعدة البيانات الحالية تقصر قراءة وحفظ خطط التدخل على المدير والمنسق. يمكن للمعلم إنشاء مقترح للمراجعة.")
-            if agent_cycle.get("subject_id") is None:
-                st.info("لربط الخطة بالمنهج، اختر شعبة ومادة مرتبطتين من الهيكل الأكاديمي ثم أعد تشغيل الدورة.")
-            with st.expander("💾 اعتماد الخطة وحفظها في intervention_plans", expanded=False):
-                v5_title = st.text_input("عنوان الخطة", value=f"تدخل {agent_cycle['skill']}", key="mueen_v5_title")
-                v5_strategy = st.text_area("استراتيجية التدخل المعتمدة", value=agent_cycle["plan"], height=160, key="mueen_v5_strategy")
-                v5_criteria = st.text_input("معيار النجاح", value=f"تحقيق إتقان {agent_cycle['threshold']}% في اختبار متابعة للمهارة", key="mueen_v5_criteria")
-                approve_plan = st.checkbox("راجعت الخطة والاختبار وتأكدت من ملاءمتهما", key="mueen_v5_approve_plan")
-                if st.button("حفظ الخطة المعتمدة", key="mueen_v5_save_plan", disabled=(not can_manage_v5 or not approve_plan or bool(missing_titles) or not quiz_valid or agent_cycle.get("source_demo") or not agent_cycle.get("subject_id"))):
-                    try:
-                        saved = mueen_v5_save_plan(agent_cycle, v5_title, v5_strategy, v5_criteria)
-                        st.session_state["mueen_v5_saved_plan"] = {"cycle_id": agent_cycle["created_at"], "plan_id": saved["id"]}
-                        st.success("حُفظت الخطة في جدول intervention_plans بنجاح.")
-                    except Exception as exc:
-                        st.error("تعذر حفظ الخطة: " + str(exc)[:400])
-            st.markdown("#### 📊 قياس قبلي/بعدي للطلاب أنفسهم")
-            post_csv = st.file_uploader("ملف نتائج التقييم البعدي CSV", type=["csv"], key="mueen_v5_post_csv")
-            paired_v5 = None
-            if post_csv is not None:
-                try:
-                    paired_v5 = mueen_v5_paired(pd.DataFrame(agent_cycle["baseline_rows"]), pd.read_csv(post_csv), agent_cycle["skill"])
-                    st.dataframe(paired_v5, use_container_width=True, hide_index=True)
-                    a, b, c = st.columns(3)
-                    a.metric("طلاب تمت مطابقتهم", len(paired_v5))
-                    b.metric("متوسط التغير", f"{paired_v5['التغير'].mean():+.1f} نقطة")
-                    c.metric("بلغوا الإتقان بعديًا", f"{(paired_v5['بعد'] >= agent_cycle['threshold']).mean() * 100:.1f}%")
-                    st.download_button("تنزيل المقارنة", paired_v5.to_csv(index=False).encode("utf-8-sig"), "mueen_paired_outcomes.csv", "text/csv", key="mueen_v5_download_paired")
-                    st.caption("المقارنة وصفية للطلاب المتطابقين، وليست إثباتًا سببيًا لفاعلية التدخل.")
-                except Exception as exc:
-                    st.error("تعذرت المطابقة: " + str(exc)[:400])
-            saved_plan_v5 = st.session_state.get("mueen_v5_saved_plan", {})
-            if saved_plan_v5.get("cycle_id") == agent_cycle["created_at"] and paired_v5 is not None:
-                next_mean = float(paired_v5["بعد"].mean())
-                advice, change = decide(float(paired_v5["قبل"].mean()), next_mean, agent_cycle["threshold"])
-                st.info("قرار الوكيل اعتمادًا على البيانات المطابقة: " + advice)
-                v5_teacher_note = st.text_area("ملاحظات المعلم على تنفيذ التدخل", key="mueen_v5_teacher_note")
-                confirm_followup = st.checkbox("أؤكد تطبيق الاختبار ومراجعة نتائجه؛ البيانات ليست نموذجية", key="mueen_v5_followup_confirm")
-                if st.button("حفظ المتابعة والقرار في intervention_followups", key="mueen_v5_save_followup", disabled=(not confirm_followup or agent_cycle.get("source_demo"))):
-                    try:
-                        mueen_v5_save_followup(agent_cycle, saved_plan_v5["plan_id"], {"after": next_mean, "recommendation": advice}, v5_teacher_note)
-                        st.success("حُفظت المتابعة. يمكن للوكيل الاستفادة منها عند قراءة سجل التدخلات لاحقًا.")
-                    except Exception as exc:
-                        st.error("تعذر حفظ المتابعة: " + str(exc)[:400])
+                            subject_options = {
+                                subject["subject_name"]: subject
+                                for subject in linked_subjects
+                            }
+                            selected_subject_name = st.selectbox(
+                                "المادة",
+                                list(subject_options.keys()),
+                                key="assessment_academic_subject",
+                            )
+                            selected_subject = subject_options[selected_subject_name]
+                            plan_subject = selected_subject_name
+                            plan_grade = str(selected_section["grade_level"])
 
-        st.markdown("### 3) إنشاء خطة علاجية")
+                            student_code = st.text_input(
+                                "رمز الطالب/المجموعة (مجهول الهوية)",
+                                value="DEMO-GROUP",
+                                help="استخدم رمزًا مستعارًا، ولا تكتب اسم الطالب.",
+                            )
 
-        if st.button(
-            "✨ إنشاء خطة بالذكاء الاصطناعي",
-            type="primary",
-            use_container_width=True
-        ):
-            try:
-                with st.spinner("يُعد مُعين الخطة..."):
-                    st.session_state["last_plan"] = create_plan(
-                        model,
-                        plan_subject,
-                        plan_grade,
-                        skill,
-                        mastery,
-                        output_language,
-                        notes,
-                        group,
-                        threshold
-                    )
-                    st.session_state["last_skill"] = skill
+                            if st.button(
+                                "💾 حفظ نتائج التقييم القبلي في Supabase",
+                                use_container_width=True,
+                            ):
+                                if not student_code.strip():
+                                    st.error("أدخل رمزًا مجهول الهوية للطالب أو المجموعة.")
+                                else:
+                                    save_student(
+                                        student_code.strip(),
+                                        str(selected_section["grade_level"]),
+                                        str(selected_section["section_name"]),
+                                    )
 
-            except Exception as e:
-                st.error(
-                    "تعذر إنشاء الخطة. تحقق من المفتاح والفوترة وإتاحة النموذج."
-                )
-                st.code(str(e)[:1000])
+                                    records = [{
+                                        "student_code": student_code.strip(),
+                                        "skill": str(row["Skill"]),
+                                        "assessment_type": "baseline",
+                                        "score": float(row["AverageMastery"]),
+                                        "max_score": 100.0,
+                                        "recommendation": (
+                                            "متوسط الإتقان القبلي للمجموعة؛ الحالة: "
+                                            + str(row["Status"])
+                                        ),
+                                        "section_id": selected_section["id"],
+                                        "subject_id": selected_subject["id"],
+                                    } for _, row in summary.iterrows()]
 
-        # عرض الخطة العلاجية بعد إنشائها
-        if st.session_state.get("last_plan"):
+                                    save_assessment_records(records)
+                                    st.success(
+                                        f"تم حفظ {len(records)} سجلًا قبليًا بنجاح."
+                                    )
 
-            skill_title = st.session_state.get("last_skill", "")
-            plan_text = st.session_state["last_plan"]
-
-            st.markdown(
-                "#### 📘 الخطة العلاجية: " + skill_title
-            )
-            # مؤشرات توضيحية فقط؛ حد الإتقان هو إعداد المعلم الحالي.
-            st.markdown(
-                '<div class="mueen-plan-v3-metrics" dir="rtl">'
-                f'<span>📊 الإتقان القبلي: {mastery:.1f}%</span>'
-                f'<span>🎯 حد الإتقان: {threshold}%</span>'
-                '<span>⏱️ النشاط: 10 دقائق</span>'
-                '</div>',
-                unsafe_allow_html=True
-            )
-
-            # تقسيم الخطة إلى بطاقات مستقلة دون تغيير النص الأصلي للتنزيل.
-            plan_is_arabic = st.session_state.get("mueen_output_language", "العربية") == "العربية"
-            plan_direction = "rtl" if plan_is_arabic else "ltr"
-            plan_headings, plan_sections = split_mueen_plan_sections(plan_text, plan_is_arabic)
-            if not plan_sections:
-                plan_sections = [(None, plan_text)]
-
-            for card_index, (section_number, section_text) in enumerate(plan_sections):
-                if section_number is not None:
-                    icon, title, _ = plan_headings[section_number]
-                    card_title = f'<div class="mueen-plan-v2-head">{icon} {html.escape(title)}</div>'
-                else:
-                    card_title = ""
-                card_html = (
-                    f'<section class="mueen-plan-v2" dir="{plan_direction}">'
-                    + card_title
-                    + '<div class="mueen-plan-v2-body">'
-                    + render_mueen_plan_body(section_text)
-                    + '</div></section>'
-                )
-                with st.container(border=True, key=f"mueen_plan_card_{card_index}"):
-                    st.markdown(card_html, unsafe_allow_html=True)
-
-            # تنزيل الخطة
-            st.download_button(
-                "📥 تنزيل الخطة العلاجية TXT",
-                plan_text,
-                "mueen_learning_plan.txt",
-                "text/plain",
-                use_container_width=True
-            )
-
-        st.markdown("### 4) إنشاء اختبار متابعة")
-        if st.button("📝 إنشاء اختبار متابعة من 5 أسئلة",use_container_width=True):
-            try:
-                with st.spinner("يُنشئ مُعين الاختبار..."):
-                    st.session_state["last_quiz"]=create_quiz(model,plan_subject,plan_grade,skill,output_language)
-                    st.session_state["quiz_skill"]=skill
-            except Exception as e:
-                st.error("تعذر إنشاء الاختبار. تحقق من إعدادات API."); st.code(str(e)[:1000])
-        if st.session_state.get("last_quiz"):
-            st.markdown("#### اختبار المتابعة: "+st.session_state.get("quiz_skill","")); st.markdown(st.session_state["last_quiz"])
-            st.download_button("تنزيل اختبار المتابعة TXT",st.session_state["last_quiz"],"mueen_followup_quiz.txt","text/plain")
-        st.markdown("### 5) تسجيل نتيجة التقييم البعدي")
-        st.caption("أدخل نتيجة التقييم بعد تنفيذ النشاط. سجل هذه النسخة مؤقت خلال الجلسة الحالية فقط.")
-        c1,c2=st.columns(2)
-        with c1: before=st.number_input("الإتقان القبلي (%)",0.0,100.0,float(mastery),1.0)
-        with c2: after=st.number_input("الإتقان البعدي (%)",0.0,100.0,min(100.0,float(mastery)+10),1.0)
-        if st.button("تحليل التحسن والخطوة التالية",use_container_width=True):
-            recommendation,delta=decide(before,after,threshold)
-            st.session_state["followup"]={"Date":datetime.now().strftime("%Y-%m-%d %H:%M"),"Subject":subject,"Grade":grade,"Skill":skill,"BeforePct":float(before),"AfterPct":float(after),"ChangePoints":float(delta),"MasteryThreshold":int(threshold),"SuggestedNextStep":recommendation}
-        if st.session_state.get("followup"):
-            result=st.session_state["followup"]
-            st.metric("التغير في الإتقان",f"{result['ChangePoints']:+.1f} نقطة مئوية")
-            if result["AfterPct"]>=result["MasteryThreshold"]: st.success(result["SuggestedNextStep"])
-            elif result["ChangePoints"]>0: st.info(result["SuggestedNextStep"])
-            else: st.warning(result["SuggestedNextStep"])
-            st.caption("التوصية مساندة للمعلم وليست قرارًا آليًا نهائيًا.")
-            st.download_button("تنزيل سجل المتابعة CSV",pd.DataFrame([result]).to_csv(index=False).encode("utf-8-sig"),"mueen_followup_record.csv","text/csv")
-        
-            if st.button("☁️ حفظ التقييم البعدي والتوصية في Supabase", use_container_width=True):
-                try:
-                    save_assessment_records([{
-                        "student_code": student_code.strip(),
-                        "skill": str(skill),
-                        "assessment_type": "follow_up",
-                        "score": float(result["AfterPct"]),
-                        "max_score": 100.0,
-                        "recommendation": (
-                            str(result["SuggestedNextStep"])
-                            + f" | القبلي: {result['BeforePct']}%"
-                            + f" | التغير: {result['ChangePoints']:+.1f} نقطة"
-                        ),
-                        "section_id": selected_section["id"],
-                        "subject_id": selected_subject["id"],
-                    }])
-                    st.success("تم حفظ نتيجة التقييم البعدي والتوصية في قاعدة البيانات.")
                 except Exception as e:
-                    st.error("تعذر حفظ النتيجة. تأكد من إعداد Secrets وصلاحية الاتصال.")
+                    st.error("تعذر تحميل الهيكل الأكاديمي أو حفظ النتائج.")
                     st.caption(str(e)[:500])
 
-        st.markdown("### 6) سجل المتابعة المحفوظ")
-        hist_code = st.text_input("رمز الطالب/المجموعة لعرض السجل", value="", key="history_code", help="أدخل رمز الطالب أو المجموعة الذي تريد عرض سجله.")
-        if st.button("عرض السجل من Supabase"):
-            try:
-                history = load_history(hist_code.strip())
-                if history.empty:
-                    st.info("لا توجد سجلات لهذا الرمز حتى الآن.")
+            weak=summary[summary["AverageMastery"]<threshold]["Skill"].tolist(); options=weak or summary["Skill"].tolist()
+            skill=st.selectbox("اختر المهارة المستهدفة",options)
+            mastery=float(summary.loc[summary["Skill"]==skill,"AverageMastery"].iloc[0])
+            st.metric("متوسط الإتقان القبلي للمهارة",f"{mastery:.1f}%")
+            notes=st.text_area("ملاحظات المعلم (اختياري)",placeholder="مثال: يحتاج بعض الطلاب إلى مثال بصري لترتيب الخطوات.")
+            group=st.selectbox("الفئة المستهدفة",["مجموعة دعم","مجموعة الصف","مجموعة إثراء"])
+            # MUEEN V5 — دورة تدخل ذكي من بيانات التقييم الحالية، دون حفظ تلقائي.
+        with teacher_tabs[2]:
+            st.markdown("### 🚀 دورة التدخل الذكي | MUEEN Agent")
+            st.caption("يشخّص المهارة الأضعف ويُنشئ الخطة والاختبار للمراجعة؛ لا تُرسل أسماء الطلاب إلى النموذج.")
+            agent_weak = summary.sort_values(["AverageMastery", "Skill"], ascending=[True, True]).iloc[0]
+            agent_skill = str(agent_weak["Skill"])
+            agent_mastery = float(agent_weak["AverageMastery"])
+            st.info(
+                f"🔎 الأولوية المقترحة: {agent_skill} — متوسط الإتقان {agent_mastery:.1f}% "
+                f"(حد الإتقان {threshold}%)."
+            )
+            current_section_id = selected_section["id"] if "selected_section" in locals() and "selected_subject" in locals() and linked_subjects else None
+            current_subject_id = selected_subject["id"] if current_section_id else None
+            current_skill_id = None
+            if current_subject_id and academic_client is not None:
+                try:
+                    skill_rows = (academic_client.table("learning_skills")
+                                  .select("id,skill_name")
+                                  .eq("school_id", academic_school_id)
+                                  .eq("subject_id", current_subject_id)
+                                  .eq("skill_name", agent_skill).limit(1).execute().data or [])
+                    current_skill_id = skill_rows[0]["id"] if skill_rows else None
+                except Exception:
+                    pass
+            if st.button("🚀 ابدأ دورة التدخل الذكي", key="mueen_agent_start", use_container_width=True):
+                if agent_mastery >= threshold:
+                    st.warning("جميع المهارات بلغت حد الإتقان؛ لا توجد مهارة متعثرة تستدعي تدخلًا علاجيًا وفق هذه البيانات.")
+                elif not get_key():
+                    st.error("مفتاح OpenAI غير متاح؛ تعذّر بدء الدورة.")
                 else:
-                    st.dataframe(history, use_container_width=True, hide_index=True)
-                    st.download_button("تنزيل السجل المحفوظ CSV", history.to_csv(index=False).encode("utf-8-sig"), "mueen_saved_history.csv", "text/csv")
-            except Exception as e:
-                st.error("تعذر جلب السجل. تأكد من إعداد Secrets.")
-                st.caption(str(e)[:500])
-        st.markdown("### 7) تنزيل تقرير المهارات")
-        st.download_button("تنزيل تقرير المهارات CSV",view.to_csv(index=False).encode("utf-8-sig"),"mueen_skill_report.csv","text/csv")
-    else: st.warning("ارفع ملف CSV صالحًا أو فعّل البيانات النموذجية.")
+                    # لا نحتفظ بمخرجات دورة قديمة إذا فشل إنشاء إحدى المرحلتين.
+                    st.session_state.pop("mueen_agent_cycle", None)
+                    st.session_state.pop("mueen_agent_decision", None)
+                    st.session_state.pop("mueen_v5_saved_plan", None)
+                    try:
+                        with st.spinner("الوكيل يحلل الأولوية وينشئ الخطة واختبار المتابعة..."):
+                            agent_plan = create_plan(
+                                model, plan_subject, plan_grade, agent_skill,
+                                agent_mastery, output_language, notes, group, threshold
+                            )
+                            agent_quiz = create_quiz(
+                                model, plan_subject, plan_grade, agent_skill, output_language
+                            )
+                        st.session_state["mueen_agent_cycle"] = {
+                            "school_id": get_selected_school_id(),
+                            "subject": plan_subject, "grade": plan_grade,
+                            "skill": agent_skill, "before": agent_mastery,
+                            "threshold": threshold, "plan": agent_plan,
+                            "quiz": agent_quiz, "language": output_language,
+                            "created_at": datetime.now().isoformat(),
+                            "section_id": current_section_id,
+                            "subject_id": current_subject_id,
+                            "skill_id": current_skill_id,
+                            "source_demo": uploaded is None and use_demo,
+                            "baseline_rows": data[["Student", "Skill", "Score", "MaxScore"]].to_dict("records"),
+                        }
+                        st.session_state["last_plan"] = agent_plan
+                        st.session_state["last_skill"] = agent_skill
+                        st.session_state["last_quiz"] = agent_quiz
+                        st.session_state["quiz_skill"] = agent_skill
+                        st.success("اكتملت مرحلتا التخطيط وإعداد الاختبار. راجع المخرجات قبل استخدامها.")
+                    except Exception as e:
+                        st.error("لم تكتمل الدورة؛ لم تُحفظ أي سجلات في قاعدة البيانات.")
+                        st.caption(str(e)[:500])
+            agent_cycle = st.session_state.get("mueen_agent_cycle")
+            if agent_cycle and agent_cycle.get("school_id") == get_selected_school_id():
+                st.markdown("#### 🧠 ملخص دورة التدخل الذكي")
+                st.write(
+                    f"**المادة:** {agent_cycle['subject']} | **الصف:** {agent_cycle['grade']} | "
+                    f"**المهارة:** {agent_cycle['skill']} | "
+                    f"**القبلي:** {agent_cycle['before']:.1f}% | "
+                    f"**المستهدف:** {agent_cycle['threshold']}%"
+                )
+                st.caption("المرحلة الحالية: بانتظار تطبيق النشاط وإدخال نتيجة اختبار المتابعة بواسطة المعلم.")
+                with st.expander("📘 عرض الخطة التي أنشأها الوكيل"):
+                    st.markdown(agent_cycle["plan"])
+                with st.expander("📝 عرض اختبار المتابعة ومفتاح الإجابة"):
+                    st.markdown(agent_cycle["quiz"])
+                st.download_button("📥 تنزيل خطة الوكيل", agent_cycle["plan"], "mueen_agent_plan.txt", key="mueen_agent_plan_download")
+                st.download_button("📥 تنزيل اختبار الوكيل", agent_cycle["quiz"], "mueen_agent_quiz.txt", key="mueen_agent_quiz_download")
+                agent_after = st.number_input(
+                    "نتيجة التقييم البعدي للدورة (%) — بعد تطبيق الاختبار",
+                    min_value=0.0, max_value=100.0, value=0.0, step=1.0,
+                    key="mueen_agent_after"
+                )
+                if st.button("📊 تحليل نتيجة الدورة واقتراح الخطوة التالية", key="mueen_agent_decide"):
+                    agent_recommendation, agent_delta = decide(
+                        agent_cycle["before"], agent_after, agent_cycle["threshold"]
+                    )
+                    st.session_state["mueen_agent_decision"] = {
+                        "school_id": agent_cycle["school_id"],
+                        "cycle_id": agent_cycle["created_at"],
+                        "skill": agent_cycle["skill"], "before": agent_cycle["before"],
+                        "after": agent_after, "delta": agent_delta,
+                        "recommendation": agent_recommendation,
+                    }
+                agent_decision = st.session_state.get("mueen_agent_decision")
+                if (agent_decision and agent_decision.get("cycle_id") == agent_cycle["created_at"]
+                        and agent_decision["school_id"] == agent_cycle["school_id"]
+                        and agent_decision["skill"] == agent_cycle["skill"]
+                        and agent_decision["before"] == agent_cycle["before"]):
+                    st.metric("التغير في الإتقان", f"{agent_decision['delta']:+.1f} نقطة مئوية")
+                    st.info(agent_decision["recommendation"])
+                    st.caption("هذه توصية مبدئية وليست قرارًا نهائيًا؛ لا يتم حفظ النتيجة تلقائيًا.")
+
+            # V5 — التحقق من جودة مخرجات الوكيل، ثم حفظها في الجداول الـ16 القائمة.
+            if agent_cycle and agent_cycle.get("school_id") == get_selected_school_id():
+                st.markdown("### 🧩 MUEEN V5 | الذاكرة والمتابعة والتوسع")
+                if agent_cycle.get("source_demo"):
+                    st.warning("هذه الدورة مستمدة من بيانات نموذجية. يمكن استعراضها، لكن لا يجوز حفظها كدليل على تحسن طلاب حقيقيين.")
+                plan_text = agent_cycle["plan"]
+                quiz_text = agent_cycle["quiz"]
+                required_titles = (["Interpretation", "Measurable objective", "Worked example", "10-minute activity", "Follow-up questions"]
+                                   if agent_cycle["language"] == "English" else
+                                   ["تفسير النتيجة", "الهدف القابل للقياس", "المثال المحلول", "النشاط العلاجي", "أسئلة المتابعة"])
+                missing_titles = [title for title in required_titles if title not in plan_text]
+                quiz_valid = len(quiz_text.strip()) >= 100
+                if missing_titles or not quiz_valid:
+                    st.error("فحص المخرجات: بعض عناصر الخطة أو الاختبار ناقصة. أعد إنشاء الدورة قبل اعتمادها.")
+                    if missing_titles:
+                        st.caption("عناوين ناقصة: " + "، ".join(missing_titles))
+                else:
+                    st.success("اجتازت المخرجات فحص البنية الأولي. ما زالت الدقة العلمية ومفتاح الإجابة بحاجة لمراجعة المعلم.")
+                role_v5 = str(st.session_state.get("mueen_school_role", "")).lower()
+                can_manage_v5 = role_v5 in ("principal", "coordinator")
+                if can_manage_v5:
+                    try:
+                        prior = mueen_v5_prior_interventions(agent_cycle["school_id"], agent_cycle.get("subject_id"), agent_cycle.get("skill_id"))
+                        with st.expander("🧠 ذاكرة الوكيل: تدخلات سابقة في المدرسة", expanded=False):
+                            if prior:
+                                st.dataframe(pd.DataFrame(prior), use_container_width=True, hide_index=True)
+                            else:
+                                st.info("لا توجد تدخلات سابقة مرئية لهذا النطاق.")
+                    except Exception as exc:
+                        st.warning("تعذر قراءة ذاكرة التدخلات وفق الصلاحيات الحالية.")
+                        st.caption(str(exc)[:250])
+                else:
+                    st.info("صلاحيات قاعدة البيانات الحالية تقصر قراءة وحفظ خطط التدخل على المدير والمنسق. يمكن للمعلم إنشاء مقترح للمراجعة.")
+                if agent_cycle.get("subject_id") is None:
+                    st.info("لربط الخطة بالمنهج، اختر شعبة ومادة مرتبطتين من الهيكل الأكاديمي ثم أعد تشغيل الدورة.")
+                with st.expander("💾 اعتماد الخطة وحفظها في intervention_plans", expanded=False):
+                    v5_title = st.text_input("عنوان الخطة", value=f"تدخل {agent_cycle['skill']}", key="mueen_v5_title")
+                    v5_strategy = st.text_area("استراتيجية التدخل المعتمدة", value=agent_cycle["plan"], height=160, key="mueen_v5_strategy")
+                    v5_criteria = st.text_input("معيار النجاح", value=f"تحقيق إتقان {agent_cycle['threshold']}% في اختبار متابعة للمهارة", key="mueen_v5_criteria")
+                    approve_plan = st.checkbox("راجعت الخطة والاختبار وتأكدت من ملاءمتهما", key="mueen_v5_approve_plan")
+                    if st.button("حفظ الخطة المعتمدة", key="mueen_v5_save_plan", disabled=(not can_manage_v5 or not approve_plan or bool(missing_titles) or not quiz_valid or agent_cycle.get("source_demo") or not agent_cycle.get("subject_id"))):
+                        try:
+                            saved = mueen_v5_save_plan(agent_cycle, v5_title, v5_strategy, v5_criteria)
+                            st.session_state["mueen_v5_saved_plan"] = {"cycle_id": agent_cycle["created_at"], "plan_id": saved["id"]}
+                            st.success("حُفظت الخطة في جدول intervention_plans بنجاح.")
+                        except Exception as exc:
+                            st.error("تعذر حفظ الخطة: " + str(exc)[:400])
+                st.markdown("#### 📊 قياس قبلي/بعدي للطلاب أنفسهم")
+                post_csv = st.file_uploader("ملف نتائج التقييم البعدي CSV", type=["csv"], key="mueen_v5_post_csv")
+                paired_v5 = None
+                if post_csv is not None:
+                    try:
+                        paired_v5 = mueen_v5_paired(pd.DataFrame(agent_cycle["baseline_rows"]), pd.read_csv(post_csv), agent_cycle["skill"])
+                        st.dataframe(paired_v5, use_container_width=True, hide_index=True)
+                        a, b, c = st.columns(3)
+                        a.metric("طلاب تمت مطابقتهم", len(paired_v5))
+                        b.metric("متوسط التغير", f"{paired_v5['التغير'].mean():+.1f} نقطة")
+                        c.metric("بلغوا الإتقان بعديًا", f"{(paired_v5['بعد'] >= agent_cycle['threshold']).mean() * 100:.1f}%")
+                        st.download_button("تنزيل المقارنة", paired_v5.to_csv(index=False).encode("utf-8-sig"), "mueen_paired_outcomes.csv", "text/csv", key="mueen_v5_download_paired")
+                        st.caption("المقارنة وصفية للطلاب المتطابقين، وليست إثباتًا سببيًا لفاعلية التدخل.")
+                    except Exception as exc:
+                        st.error("تعذرت المطابقة: " + str(exc)[:400])
+                saved_plan_v5 = st.session_state.get("mueen_v5_saved_plan", {})
+                if saved_plan_v5.get("cycle_id") == agent_cycle["created_at"] and paired_v5 is not None:
+                    next_mean = float(paired_v5["بعد"].mean())
+                    advice, change = decide(float(paired_v5["قبل"].mean()), next_mean, agent_cycle["threshold"])
+                    st.info("قرار الوكيل اعتمادًا على البيانات المطابقة: " + advice)
+                    v5_teacher_note = st.text_area("ملاحظات المعلم على تنفيذ التدخل", key="mueen_v5_teacher_note")
+                    confirm_followup = st.checkbox("أؤكد تطبيق الاختبار ومراجعة نتائجه؛ البيانات ليست نموذجية", key="mueen_v5_followup_confirm")
+                    if st.button("حفظ المتابعة والقرار في intervention_followups", key="mueen_v5_save_followup", disabled=(not confirm_followup or agent_cycle.get("source_demo"))):
+                        try:
+                            mueen_v5_save_followup(agent_cycle, saved_plan_v5["plan_id"], {"after": next_mean, "recommendation": advice}, v5_teacher_note)
+                            st.success("حُفظت المتابعة. يمكن للوكيل الاستفادة منها عند قراءة سجل التدخلات لاحقًا.")
+                        except Exception as exc:
+                            st.error("تعذر حفظ المتابعة: " + str(exc)[:400])
+
+            st.markdown("### 3) إنشاء خطة علاجية")
+
+            if st.button(
+                "✨ إنشاء خطة بالذكاء الاصطناعي",
+                type="primary",
+                use_container_width=True
+            ):
+                try:
+                    with st.spinner("يُعد مُعين الخطة..."):
+                        st.session_state["last_plan"] = create_plan(
+                            model,
+                            plan_subject,
+                            plan_grade,
+                            skill,
+                            mastery,
+                            output_language,
+                            notes,
+                            group,
+                            threshold
+                        )
+                        st.session_state["last_skill"] = skill
+
+                except Exception as e:
+                    st.error(
+                        "تعذر إنشاء الخطة. تحقق من المفتاح والفوترة وإتاحة النموذج."
+                    )
+                    st.code(str(e)[:1000])
+
+            # عرض الخطة العلاجية بعد إنشائها
+            if st.session_state.get("last_plan"):
+
+                skill_title = st.session_state.get("last_skill", "")
+                plan_text = st.session_state["last_plan"]
+
+                st.markdown(
+                    "#### 📘 الخطة العلاجية: " + skill_title
+                )
+                # مؤشرات توضيحية فقط؛ حد الإتقان هو إعداد المعلم الحالي.
+                st.markdown(
+                    '<div class="mueen-plan-v3-metrics" dir="rtl">'
+                    f'<span>📊 الإتقان القبلي: {mastery:.1f}%</span>'
+                    f'<span>🎯 حد الإتقان: {threshold}%</span>'
+                    '<span>⏱️ النشاط: 10 دقائق</span>'
+                    '</div>',
+                    unsafe_allow_html=True
+                )
+
+                # تقسيم الخطة إلى بطاقات مستقلة دون تغيير النص الأصلي للتنزيل.
+                plan_is_arabic = st.session_state.get("mueen_output_language", "العربية") == "العربية"
+                plan_direction = "rtl" if plan_is_arabic else "ltr"
+                plan_headings, plan_sections = split_mueen_plan_sections(plan_text, plan_is_arabic)
+                if not plan_sections:
+                    plan_sections = [(None, plan_text)]
+
+                for card_index, (section_number, section_text) in enumerate(plan_sections):
+                    if section_number is not None:
+                        icon, title, _ = plan_headings[section_number]
+                        card_title = f'<div class="mueen-plan-v2-head">{icon} {html.escape(title)}</div>'
+                    else:
+                        card_title = ""
+                    card_html = (
+                        f'<section class="mueen-plan-v2" dir="{plan_direction}">'
+                        + card_title
+                        + '<div class="mueen-plan-v2-body">'
+                        + render_mueen_plan_body(section_text)
+                        + '</div></section>'
+                    )
+                    with st.container(border=True, key=f"mueen_plan_card_{card_index}"):
+                        st.markdown(card_html, unsafe_allow_html=True)
+
+                # تنزيل الخطة
+                st.download_button(
+                    "📥 تنزيل الخطة العلاجية TXT",
+                    plan_text,
+                    "mueen_learning_plan.txt",
+                    "text/plain",
+                    use_container_width=True
+                )
+
+        with teacher_tabs[3]:
+            st.markdown("### 4) إنشاء اختبار متابعة")
+            if st.button("📝 إنشاء اختبار متابعة من 5 أسئلة",use_container_width=True):
+                try:
+                    with st.spinner("يُنشئ مُعين الاختبار..."):
+                        st.session_state["last_quiz"]=create_quiz(model,plan_subject,plan_grade,skill,output_language)
+                        st.session_state["quiz_skill"]=skill
+                except Exception as e:
+                    st.error("تعذر إنشاء الاختبار. تحقق من إعدادات API."); st.code(str(e)[:1000])
+            if st.session_state.get("last_quiz"):
+                st.markdown("#### اختبار المتابعة: "+st.session_state.get("quiz_skill","")); st.markdown(st.session_state["last_quiz"])
+                st.download_button("تنزيل اختبار المتابعة TXT",st.session_state["last_quiz"],"mueen_followup_quiz.txt","text/plain")
+            st.markdown("### 5) تسجيل نتيجة التقييم البعدي")
+            st.caption("أدخل نتيجة التقييم بعد تنفيذ النشاط. سجل هذه النسخة مؤقت خلال الجلسة الحالية فقط.")
+            c1,c2=st.columns(2)
+            with c1: before=st.number_input("الإتقان القبلي (%)",0.0,100.0,float(mastery),1.0)
+            with c2: after=st.number_input("الإتقان البعدي (%)",0.0,100.0,min(100.0,float(mastery)+10),1.0)
+            if st.button("تحليل التحسن والخطوة التالية",use_container_width=True):
+                recommendation,delta=decide(before,after,threshold)
+                st.session_state["followup"]={"Date":datetime.now().strftime("%Y-%m-%d %H:%M"),"Subject":subject,"Grade":grade,"Skill":skill,"BeforePct":float(before),"AfterPct":float(after),"ChangePoints":float(delta),"MasteryThreshold":int(threshold),"SuggestedNextStep":recommendation}
+            if st.session_state.get("followup"):
+                result=st.session_state["followup"]
+                st.metric("التغير في الإتقان",f"{result['ChangePoints']:+.1f} نقطة مئوية")
+                if result["AfterPct"]>=result["MasteryThreshold"]: st.success(result["SuggestedNextStep"])
+                elif result["ChangePoints"]>0: st.info(result["SuggestedNextStep"])
+                else: st.warning(result["SuggestedNextStep"])
+                st.caption("التوصية مساندة للمعلم وليست قرارًا آليًا نهائيًا.")
+                st.download_button("تنزيل سجل المتابعة CSV",pd.DataFrame([result]).to_csv(index=False).encode("utf-8-sig"),"mueen_followup_record.csv","text/csv")
+        
+                if st.button("☁️ حفظ التقييم البعدي والتوصية في Supabase", use_container_width=True):
+                    try:
+                        save_assessment_records([{
+                            "student_code": student_code.strip(),
+                            "skill": str(skill),
+                            "assessment_type": "follow_up",
+                            "score": float(result["AfterPct"]),
+                            "max_score": 100.0,
+                            "recommendation": (
+                                str(result["SuggestedNextStep"])
+                                + f" | القبلي: {result['BeforePct']}%"
+                                + f" | التغير: {result['ChangePoints']:+.1f} نقطة"
+                            ),
+                            "section_id": selected_section["id"],
+                            "subject_id": selected_subject["id"],
+                        }])
+                        st.success("تم حفظ نتيجة التقييم البعدي والتوصية في قاعدة البيانات.")
+                    except Exception as e:
+                        st.error("تعذر حفظ النتيجة. تأكد من إعداد Secrets وصلاحية الاتصال.")
+                        st.caption(str(e)[:500])
+
+        with teacher_tabs[4]:
+            st.markdown("### 6) سجل المتابعة المحفوظ")
+            hist_code = st.text_input("رمز الطالب/المجموعة لعرض السجل", value="", key="history_code", help="أدخل رمز الطالب أو المجموعة الذي تريد عرض سجله.")
+            if st.button("عرض السجل من Supabase"):
+                try:
+                    history = load_history(hist_code.strip())
+                    if history.empty:
+                        st.info("لا توجد سجلات لهذا الرمز حتى الآن.")
+                    else:
+                        st.dataframe(history, use_container_width=True, hide_index=True)
+                        st.download_button("تنزيل السجل المحفوظ CSV", history.to_csv(index=False).encode("utf-8-sig"), "mueen_saved_history.csv", "text/csv")
+                except Exception as e:
+                    st.error("تعذر جلب السجل. تأكد من إعداد Secrets.")
+                    st.caption(str(e)[:500])
+            st.markdown("### 7) تنزيل تقرير المهارات")
+            st.download_button("تنزيل تقرير المهارات CSV",view.to_csv(index=False).encode("utf-8-sig"),"mueen_skill_report.csv","text/csv")
+    if data is None or data.empty: st.warning("ارفع ملف CSV صالحًا أو فعّل البيانات النموذجية.")
     with st.expander("🔐 إعداد مفاتيح OpenAI وSupabase بأمان"):
         st.markdown("""1. احتفظ بمفتاح OpenAI في Streamlit → Settings → Secrets باسم `OPENAI_API_KEY`.
     2. أضف `SUPABASE_URL` و`SUPABASE_PUBLISHABLE_KEY` إلى Streamlit Secrets.
