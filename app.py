@@ -1341,7 +1341,7 @@ st.markdown("""
   margin:7px 0!important;font-weight:800}
 .mueen-pro-hero p {color:#E1F3F4!important;font-size:15px!important;
   margin:0!important;line-height:1.85!important;max-width:900px}
-.mueen-pro-kicker {color:#F1C778;font-size:11px;font-weight:800;letter-spacing:1.1px}
+.mueen-pro-kicker {color:#F8D58B;font-size:clamp(16px,1.5vw,22px);font-weight:850;letter-spacing:.5px;line-height:1.55;text-shadow:0 1px 2px rgba(0,0,0,.2)}
 .st-key-mueen_nav_0 button,.st-key-mueen_nav_1 button,
 .st-key-mueen_nav_2 button,.st-key-mueen_nav_3 button,
 .st-key-mueen_nav_4 button,.st-key-mueen_nav_5 button,
@@ -2420,8 +2420,13 @@ with st.sidebar:
     )
     st.divider()
     st.header("⚙️ إعدادات التحليل")
-    subject=st.selectbox("المادة",["الحوسبة","الرياضيات","العلوم","اللغة العربية","اللغة الإنجليزية"])
-    grade=st.selectbox("الصف",["الخامس","السادس","السابع","الثامن","التاسع"])
+    subject=st.selectbox("المادة", [
+        "الحوسبة", "الرياضيات", "العلوم", "اللغة العربية", "اللغة الإنجليزية",
+        "الفيزياء", "الكيمياء", "الأحياء", "الدراسات الاجتماعية",
+        "التربية الإسلامية", "التربية الأخلاقية", "التربية البدنية والصحية",
+        "التصميم والتكنولوجيا", "إدارة الأعمال", "الاقتصاد"
+    ], help="مواد شائعة للاختيار العام؛ المواد المعتمدة فعليًا لكل صف تحددها المدرسة والخطة الدراسية.")
+    grade=st.selectbox("الصف",["الخامس","السادس","السابع","الثامن","التاسع","العاشر","الحادي عشر","الثاني عشر"])
     threshold=st.slider("حد الإتقان (%)",50,100,80,5)
     output_language = st.selectbox(
     "لغة المخرجات" if st.session_state.get("mueen_language", "العربية") == "العربية"
