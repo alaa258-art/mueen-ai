@@ -1278,6 +1278,46 @@ div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_6 button {
 </style>
 """, unsafe_allow_html=True)
 
+# V7.6: compact top layout and improved readable type; presentation only.
+st.markdown("""
+<style>
+/* Reduce excessive top spacing on the home workspace, not on forms or data views. */
+.mueen-pro-hero {
+  padding:20px 27px 22px!important;
+  margin:0 0 7px!important;
+  border-radius:18px!important;
+}
+.mueen-pro-hero h2 {
+  font-size:clamp(29px,2.6vw,39px)!important;
+  line-height:1.55!important;
+  margin:3px 0 6px!important;
+}
+.mueen-pro-hero p {
+  font-size:clamp(16px,1.1vw,18px)!important;
+  line-height:1.65!important;
+}
+.mueen-pro-kicker {
+  font-size:clamp(17px,1.45vw,22px)!important;
+  line-height:1.45!important;
+}
+/* Tighten whitespace between school controls and workspace header. */
+[data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .mueen-pro-hero) {
+  gap:.65rem!important;
+}
+/* Stronger Arabic labels for school selection and navigation. */
+[data-testid="stWidgetLabel"] p {font-size:14px!important;line-height:1.6!important}
+.st-key-mueen_nav_0 button p,.st-key-mueen_nav_1 button p,
+.st-key-mueen_nav_2 button p,.st-key-mueen_nav_3 button p,
+.st-key-mueen_nav_4 button p,.st-key-mueen_nav_5 button p,
+.st-key-mueen_nav_6 button p {font-size:16px!important;font-weight:700!important}
+@media(max-width:750px){
+  .mueen-pro-hero{padding:17px 18px 19px!important}
+  .mueen-pro-hero h2{font-size:27px!important}
+  .mueen-pro-kicker{font-size:16px!important}
+}
+</style>
+""", unsafe_allow_html=True)
+
 # V7.4: premium quick access typography and sidebar treatment.
 st.markdown("""
 <style>
