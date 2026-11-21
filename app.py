@@ -1599,6 +1599,7 @@ st.markdown("""
  border-radius:18px!important;
  border-bottom:4px solid #D9A441!important;
 }
+.mueen-v5-title .mueen-edition {color:#FFD17A!important;font-family:Arial, sans-serif!important;font-size:clamp(18px,1.7vw,25px)!important;font-weight:800!important;letter-spacing:.6px!important;text-align:right!important;line-height:1.45!important;margin:0 0 14px!important;direction:ltr!important;unicode-bidi:isolate!important;}
 .mueen-v5-title h2 {font-size:clamp(27px,2.5vw,36px)!important;line-height:1.6!important;}
 .mueen-v5-title p {font-size:17px!important;line-height:1.9!important;margin-top:10px!important;}
 @media(max-width:760px){.mueen-v5-title{padding:18px!important;}[class*="st-key-mueen_nav_"] button{font-size:15px!important;}}
@@ -1626,7 +1627,7 @@ if st.session_state["mueen_active_page"] not in allowed_pages:
     st.session_state["mueen_active_page"] = 0
 active_page = st.session_state["mueen_active_page"]
 if active_page == 0:
-    st.markdown("""<div class="mueen-v5-title"><h2>✨ مساحة عمل مُعين</h2>
+    st.markdown("""<div class="mueen-v5-title"><div class="mueen-edition" lang="en" dir="ltr">MUEEN AI · PROFESSIONAL COMPETITION EDITION</div><h2>✨ مساحة عمل مُعين الذكية</h2>
     <p>من البيانات إلى القرار التعليمي: تابع مؤشرات التعلم، وحدد المهارات التي تحتاج دعمًا، وراجع خطط التدخل ونتائج المتابعة.</p></div>""", unsafe_allow_html=True)
     st.caption("المهام المتاحة بحسب صلاحيات حسابك في المدرسة النشطة")
     for offset in range(0, len(nav_items), 3):
