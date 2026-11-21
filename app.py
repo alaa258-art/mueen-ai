@@ -1576,6 +1576,35 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Professional Test — final home visual overrides (no changes to data or navigation logic).
+st.markdown("""
+<style>
+/* Restore the distinctive seven-card palette in the reference design. */
+.st-key-mueen_nav_0 button {background:#10243A!important;}
+.st-key-mueen_nav_1 button {background:#087E8B!important;}
+.st-key-mueen_nav_2 button {background:#2865A2!important;}
+.st-key-mueen_nav_3 button {background:#7553A6!important;}
+.st-key-mueen_nav_4 button {background:#A66A27!important;}
+.st-key-mueen_nav_5 button {background:#20806A!important;}
+.st-key-mueen_nav_6 button {background:#B45366!important;}
+.st-key-mueen_nav_7 button {background:#99621E!important;}
+[class*="st-key-mueen_nav_"] button {
+ min-height:76px!important;border-radius:15px!important;
+ font-size:18px!important;font-weight:800!important;
+ box-shadow:0 6px 16px rgba(16,36,58,.13)!important;
+}
+.mueen-v5-title {
+ padding:26px 32px!important;
+ margin:14px 0 22px!important;
+ border-radius:18px!important;
+ border-bottom:4px solid #D9A441!important;
+}
+.mueen-v5-title h2 {font-size:clamp(27px,2.5vw,36px)!important;line-height:1.6!important;}
+.mueen-v5-title p {font-size:17px!important;line-height:1.9!important;margin-top:10px!important;}
+@media(max-width:760px){.mueen-v5-title{padding:18px!important;}[class*="st-key-mueen_nav_"] button{font-size:15px!important;}}
+</style>
+""", unsafe_allow_html=True)
+
 # واجهة مبنية على الدور: البطاقات في الرئيسية فقط، وتنقل مختصر في الداخل.
 st.session_state.setdefault("mueen_active_page", 0)
 role = str(st.session_state.get("mueen_school_role", "")).lower()

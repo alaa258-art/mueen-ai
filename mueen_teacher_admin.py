@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 import streamlit as st
 
 
-ROLES = {'teacher': 'معلم', 'coordinator': 'منسق'}
+ROLES = {'teacher': 'معلم', 'coordinator': 'منسق', 'principal': 'مدير المدرسة'}
 
 
 def _call(action, school_id, token, **payload):
@@ -52,7 +52,7 @@ def render_teacher_admin(school_id, role):
         return
 
     with st.expander('👥 إدارة المعلمين والحسابات | V6.3', expanded=False):
-        st.caption('إدارة عضويات المدرسة ودعوات المعلمين. الصلاحيات تُتحقق في الخادم.')
+        st.caption('إدارة عضويات المدرسة ودعوات المعلمين والمنسقين والمديرين. جميع الصلاحيات الحساسة يتحقق منها الخادم.')
         token = st.session_state.get('mueen_access_token')
         if not token:
             st.warning('سجّل الدخول مجددًا.')
@@ -89,13 +89,13 @@ def render_teacher_admin(school_id, role):
             return
 
         with st.form('v63_invite_form'):
-            email = st.text_input('البريد الإلكتروني للمعلم')
+            email = st.text_input('البريد الإلكتروني للعضو')
             role_choice = st.selectbox('الدور', list(ROLES), format_func=lambda x: ROLES[x])
             submit = st.form_submit_button('📩 إرسال دعوة وربط العضوية')
         if submit:
             try:
                 _call('invite', school_id, token, email=email.strip(), role=role_choice)
-                st.success('تم قبول طلب الدعوة وربط العضوية. تحقق من وصول البريد الإلكتروني.')
+                st.success('قبل الخادم طلب الدعوة وربط العضوية. تحقق من وصول البريد الإلكتروني.')
                 _refresh()
                 st.rerun()
             except ValueError as exc:
@@ -108,7 +108,7 @@ def render_teacher_admin(school_id, role):
         format_member = lambda k: f"{options[k].get('email') or k} ({options[k].get('role')})"
 
         st.markdown('#### 🔁 تغيير دور عضو موجود')
-        st.caption('استخدم هذا القسم للحسابات الموجودة؛ لا ترسل دعوة جديدة لتغيير الدور.')
+        st.caption('استخدم هذا القسم للحسابات الموجودة؛ يدعم تغيير دور المدير فقط إذا سمحت وظيفة Supabase بذلك. يجب حماية آخر مدير على الخادم.')
         with st.form('v63_role_form'):
             role_user_id = st.selectbox(
                 'العضوية المراد تغيير دورها', list(options),
@@ -136,7 +136,7 @@ def render_teacher_admin(school_id, role):
                     st.rerun()
                 except ValueError as exc:
                     st.error(f'لم يتم تغيير الدور: {exc}')
-                    st.info('تأكد من أن Edge Function تدعم الإجراء set_role وتتحقق من صلاحية المدير.')
+                    st.info('يتطلب تغيير الأدوار دعم إجراء set_role في Edge Function والتحقق من صلاحية المدير.')
 
         st.markdown('#### تفعيل العضوية أو تعطيلها')
         with st.form('v63_status_form'):
@@ -158,3 +158,48 @@ def render_teacher_admin(school_id, role):
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))
+
+        st.markdown('#### 🛡️ إزالة عضو من المدرسة')
+        st.caption('الإزالة هنا تعني تعطيل العضوية في المدرسة فقط؛ لا تحذف حساب Supabase أو سجلات الطالب أو التقييمات.')
+        active_targets = {uid: m for uid, m in options.items() if bool(m.get('is_active'))}
+        if active_targets:
+            with st.form('v63_revoke_membership_form'):
+                revoke_uid = st.selectbox(
+                    'العضو المراد سحب صلاحياته', list(active_targets),
+                    format_func=lambda uid: f"{active_targets[uid].get('email') or uid} ({ROLES.get(active_targets[uid].get('role'), active_targets[uid].get('role'))})",
+                    key='v63_revoke_user_id',
+                )
+                st.warning('بعد التعطيل لن يتمكن العضو من الوصول إلى بيانات هذه المدرسة عند التحقق من العضوية مجددًا.')
+                revoke_confirm = st.checkbox('أؤكد سحب عضوية هذا الحساب من المدرسة')
+                revoke_submit = st.form_submit_button('🚫 إزالة العضوية من المدرسة')
+            if revoke_submit:
+                if not revoke_confirm:
+                    st.warning('يرجى تأكيد إزالة العضوية.')
+                else:
+                    # Protect own membership on the client; server must independently
+                    # prevent self-removal and removal of the final active principal.
+                    try:
+                        from supabase import create_client
+                        auth_client = create_client(
+                            str(st.secrets['SUPABASE_URL']),
+                            str(st.secrets['SUPABASE_PUBLISHABLE_KEY']),
+                        )
+                        current_user = auth_client.auth.get_user(token).user
+                        current_uid = str(current_user.id) if current_user else ''
+                    except Exception:
+                        current_uid = ''
+                    principals = [m for m in members if m.get('role') == 'principal' and m.get('is_active')]
+                    if not current_uid:
+                        st.error('تعذر التحقق من هوية المدير الحالي. أعد تسجيل الدخول.')
+                    elif revoke_uid == current_uid:
+                        st.error('لا يمكن للمدير إزالة عضويته الشخصية.')
+                    elif active_targets[revoke_uid].get('role') == 'principal' and len(principals) <= 1:
+                        st.error('لا يمكن إزالة آخر مدير نشط في المدرسة.')
+                    else:
+                        try:
+                            _call('set_active', school_id, token, user_id=revoke_uid, is_active=False)
+                            _refresh()
+                            st.success('تم تعطيل عضوية المستخدم في هذه المدرسة. لم يُحذف حسابه.')
+                            st.rerun()
+                        except ValueError as exc:
+                            st.error(f'تعذر إزالة العضوية: {exc}')
