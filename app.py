@@ -1036,138 +1036,7 @@ if not st.session_state.get("mueen_access_token"):
             else "Supabase could not be initialized. Check your Streamlit Secrets."
         )
         st.stop()
-    
-    # تفعيل دعوة المعلم داخل Streamlit
-    if st.query_params.get("activation") == "teacher":
-        st.subheader("🔐 تفعيل حساب المعلم")
-        st.caption("أنشئ كلمة مرور لحسابك في مُعين AI.")
 
-        if not st.session_state.get("mueen_invite_verified"):
-            
-            invite_receiver = st.components.v2.component(
-                "mueen_invite_receiver",
-                js="""
-export default function(component) {
-    const { setTriggerValue } = component;
-    const params = new URLSearchParams(
-        window.location.hash.slice(1)
-    );
-
-    const access = params.get("access_token");
-    const refresh = params.get("refresh_token");
-    const type = params.get("type");
-
-    setTriggerValue("status", {
-        has_access: Boolean(access),
-        has_refresh: Boolean(refresh),
-        invitation_type: type || "missing"
-    });
-
-   if (access && refresh && type === "invite") {
-    setTriggerValue("tokens", {
-        access_token: access,
-        refresh_token: refresh
-    });
-
-    // إزالة الرموز من شريط العنوان
-    window.history.replaceState(
-        null,
-        "",
-        window.location.pathname + window.location.search
-    );
-}
-}
-                """,
-            )
-
-            result = invite_receiver(
-                key="mueen_invite_component",
-                on_tokens_change=lambda: None,
-                on_status_change=lambda: None,
-            )
-
-            tokens = result.tokens
-
-            
-            if tokens:
-                try:
-                    response = auth_client.auth.set_session(
-                        tokens["access_token"],
-                        tokens["refresh_token"],
-                    )
-                    if not response.session:
-                        raise ValueError("Invalid invitation session")
-
-                    st.session_state["mueen_invite_access"] = (
-                        response.session.access_token
-                    )
-                    st.session_state["mueen_invite_refresh"] = (
-                        response.session.refresh_token
-                    )
-                    st.session_state["mueen_invite_verified"] = True
-                    st.rerun()
-                except Exception:
-                    st.error("تعذر التحقق من الدعوة أو انتهت صلاحيتها.")
-            else:
-                st.info("افتح رابط الدعوة من بريدك الإلكتروني لإكمال التفعيل.")
-
-        else:
-            with st.form("mueen_activate_teacher"):
-                new_password = st.text_input(
-                    "كلمة المرور الجديدة",
-                    type="password",
-                )
-                confirm_password = st.text_input(
-                    "تأكيد كلمة المرور",
-                    type="password",
-                )
-                activate = st.form_submit_button(
-                    "تفعيل الحساب",
-                    use_container_width=True,
-                )
-
-            if activate:
-                if len(new_password) < 12:
-                    st.warning("كلمة المرور يجب ألا تقل عن 12 حرفًا.")
-                elif new_password != confirm_password:
-                    st.warning("كلمتا المرور غير متطابقتين.")
-                else:
-                    try:
-                        auth_client.auth.set_session(
-                            st.session_state["mueen_invite_access"],
-                            st.session_state["mueen_invite_refresh"],
-                        )
-
-                        updated = auth_client.auth.update_user({
-                            "password": new_password
-                        })
-                        if not updated.user:
-                            raise ValueError("Password update failed")
-
-                        auth_client.auth.sign_out()
-
-                        for key in (
-                            "mueen_invite_access",
-                            "mueen_invite_refresh",
-                            "mueen_invite_verified",
-                        ):
-                            st.session_state.pop(key, None)
-
-                        st.query_params.clear()
-                        st.session_state["mueen_activation_success"] = True
-                        st.rerun()
-
-                    except Exception:
-                        st.error(
-                            "تعذر إنشاء كلمة المرور. "
-                            "قد تكون جلسة الدعوة منتهية الصلاحية."
-                        )
-
-        st.stop()
-    if st.session_state.pop("mueen_activation_success", False):
-        st.success(
-            "تم إنشاء كلمة المرور. يمكنك الآن تسجيل الدخول بحساب المعلم."
-        )
     with st.form("mueen_login_form"):
         email = st.text_input(
             "البريد الإلكتروني" if is_arabic else "Email address"
@@ -1409,6 +1278,151 @@ div[data-testid="stHorizontalBlock"] .st-key-mueen_nav_6 button {
 </style>
 """, unsafe_allow_html=True)
 
+# V7.6: compact top layout and improved readable type; presentation only.
+st.markdown("""
+<style>
+/* Reduce excessive top spacing on the home workspace, not on forms or data views. */
+.mueen-pro-hero {
+  padding:20px 27px 22px!important;
+  margin:0 0 7px!important;
+  border-radius:18px!important;
+}
+.mueen-pro-hero h2 {
+  font-size:clamp(29px,2.6vw,39px)!important;
+  line-height:1.55!important;
+  margin:3px 0 6px!important;
+}
+.mueen-pro-hero p {
+  font-size:clamp(16px,1.1vw,18px)!important;
+  line-height:1.65!important;
+}
+.mueen-pro-kicker {
+  font-size:clamp(17px,1.45vw,22px)!important;
+  line-height:1.45!important;
+}
+/* Tighten whitespace between school controls and workspace header. */
+[data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .mueen-pro-hero) {
+  gap:.65rem!important;
+}
+/* Stronger Arabic labels for school selection and navigation. */
+[data-testid="stWidgetLabel"] p {font-size:14px!important;line-height:1.6!important}
+.st-key-mueen_nav_0 button p,.st-key-mueen_nav_1 button p,
+.st-key-mueen_nav_2 button p,.st-key-mueen_nav_3 button p,
+.st-key-mueen_nav_4 button p,.st-key-mueen_nav_5 button p,
+.st-key-mueen_nav_6 button p {font-size:16px!important;font-weight:700!important}
+@media(max-width:750px){
+  .mueen-pro-hero{padding:17px 18px 19px!important}
+  .mueen-pro-hero h2{font-size:27px!important}
+  .mueen-pro-kicker{font-size:16px!important}
+}
+</style>
+""", unsafe_allow_html=True)
+
+# V7.4: premium quick access typography and sidebar treatment.
+st.markdown("""
+<style>
+/* Scoped sidebar refinements; no changes to widget values or callbacks. */
+section[data-testid="stSidebar"] {
+  background:linear-gradient(180deg,#FFFFFF 0%,#F7FAFC 100%);
+  border-right:1px solid #E3EBF0;
+}
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] {
+  font-family:Tahoma,Arial,"Segoe UI",sans-serif!important;
+}
+.mueen-quick-head {
+  display:flex;flex-direction:row;align-items:center;gap:11px;
+  margin:6px 0 12px;padding:13px 11px;
+  background:linear-gradient(115deg,#F2F8FA,#FFFFFF);
+  border:1px solid #E1EBF0;border-radius:14px;
+  box-shadow:0 4px 13px rgba(16,36,58,.035);
+}
+.mueen-quick-icon {
+  width:39px;height:39px;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;background:#E1F1F2;border-radius:12px;font-size:20px;
+}
+.mueen-quick-title {
+  color:#12344C;font-weight:800;font-size:17px;line-height:1.6;
+}
+.mueen-quick-subtitle {
+  color:#697D8A;font-size:11px;line-height:1.8;
+}
+section[data-testid="stSidebar"] div[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+  border-radius:11px!important;border:1px solid #D5E1E7!important;
+  background:#FFFFFF!important;min-height:43px!important;
+  box-shadow:0 2px 5px rgba(16,36,58,.025);
+}
+section[data-testid="stSidebar"] div[data-testid="stSelectbox"] [data-baseweb="select"] > div:focus-within {
+  border-color:#087E8B!important;box-shadow:0 0 0 2px rgba(8,126,139,.10)!important;
+}
+section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
+  color:#243C50!important;font-size:13px!important;font-weight:700!important;
+}
+section[data-testid="stSidebar"] hr {border-color:#E2EAF0!important;margin:16px 0!important}
+</style>
+""", unsafe_allow_html=True)
+
+# V7.2: workspace visual enhancements only. No changes to agent, auth, or database.
+st.markdown("""
+<style>
+/* A refined, consistent competition-ready visual system */
+:root {--mueen-ink:#10243A;--mueen-sea:#087E8B;--mueen-gold:#D9A441}
+.mueen-pro-hero {
+  position:relative;overflow:hidden;
+  background:linear-gradient(112deg,#10243A 0%,#16445A 52%,#087E8B 100%);
+  border-radius:20px;padding:27px 30px 29px;margin:8px 0 20px;
+  border-bottom:4px solid #D9A441;
+  box-shadow:0 13px 32px rgba(16,36,58,.13);
+}
+.mueen-pro-hero:before {content:"";position:absolute;width:230px;height:230px;
+  border-radius:50%;border:1px solid rgba(255,255,255,.12);left:-50px;top:-110px}
+.mueen-pro-hero h2 {color:#fff!important;font-size:clamp(24px,2.4vw,34px)!important;
+  margin:7px 0!important;font-weight:800}
+.mueen-pro-hero p {color:#E1F3F4!important;font-size:15px!important;
+  margin:0!important;line-height:1.85!important;max-width:900px}
+.mueen-pro-kicker {color:#F8D58B;font-size:clamp(16px,1.5vw,22px);font-weight:850;letter-spacing:.5px;line-height:1.55;text-shadow:0 1px 2px rgba(0,0,0,.2)}
+.st-key-mueen_nav_0 button,.st-key-mueen_nav_1 button,
+.st-key-mueen_nav_2 button,.st-key-mueen_nav_3 button,
+.st-key-mueen_nav_4 button,.st-key-mueen_nav_5 button,
+.st-key-mueen_nav_6 button {
+  min-height:88px!important;border-radius:17px!important;
+  box-shadow:0 8px 20px rgba(16,36,58,.10)!important;
+  border:1px solid rgba(255,255,255,.16)!important;
+  transition:transform .18s ease,box-shadow .18s ease!important;
+}
+.st-key-mueen_nav_0 button:hover,.st-key-mueen_nav_1 button:hover,
+.st-key-mueen_nav_2 button:hover,.st-key-mueen_nav_3 button:hover,
+.st-key-mueen_nav_4 button:hover,.st-key-mueen_nav_5 button:hover,
+.st-key-mueen_nav_6 button:hover {
+  transform:translateY(-3px)!important;
+  box-shadow:0 12px 25px rgba(16,36,58,.16)!important;
+}
+.mueen-pro-journey {margin:24px 0 10px;padding:22px 23px;
+  background:#fff;border:1px solid #DDE9ED;border-radius:18px;
+  box-shadow:0 6px 18px rgba(16,36,58,.04)}
+.mueen-pro-section-head h3 {margin:0 0 4px!important;color:#10243A!important;
+  font-size:22px!important}
+.mueen-pro-section-head p {margin:0 0 18px!important;color:#526779!important;
+  font-size:14px!important}
+.mueen-pro-steps {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+.mueen-pro-step {display:flex;flex-direction:column;gap:5px;position:relative;
+  background:linear-gradient(135deg,#F1F9FA,#F8FBFC);
+  border:1px solid #D8E9EC;border-radius:13px;padding:13px 14px;
+  min-height:94px}
+.mueen-pro-step b {font-size:12px;color:#087E8B;letter-spacing:1px}
+.mueen-pro-step strong {color:#17334A;font-size:15px}
+.mueen-pro-step small {color:#5B7280;font-size:12px}
+.mueen-pro-note {margin-top:14px;font-size:12px;color:#627887}
+@media(max-width:750px) {
+  .mueen-pro-hero {padding:20px 17px}
+  .mueen-pro-journey {padding:17px 13px}
+  .mueen-pro-steps {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:430px) {.mueen-pro-steps{grid-template-columns:1fr}}
+</style>
+""", unsafe_allow_html=True)
+
 st.session_state.setdefault("mueen_active_page", 0)
 nav_items = [
     ("🏠 الرئيسية", 0), ("📊 لوحة القيادة", 1),
@@ -1419,17 +1433,42 @@ nav_items = [
 # V6: البطاقات الكبيرة للرئيسية فقط، والتنقل المختصر للصفحات الداخلية.
 active_page = st.session_state["mueen_active_page"]
 if active_page == 0:
-    st.markdown("""<div class="mueen-v5-title"><h2>✨ مساحة عمل مُعين</h2>
-    <p>اختر القسم من البطاقات الملونة للانتقال مباشرة إلى أدواته.</p></div>""",
-    unsafe_allow_html=True)
+    st.markdown("""
+    <div class="mueen-pro-hero" dir="rtl">
+      <div class="mueen-pro-kicker">MUEEN AI · PROFESSIONAL COMPETITION EDITION</div>
+      <h2>✨ مساحة عمل مُعين الذكية</h2>
+      <p>من البيانات إلى قرارات تعليمية مدروسة — تحليل المهارات، تخطيط التدخل، وقياس الأثر تحت إشراف المعلم.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("#### 🧩 أدوات مساحة العمل")
+    # Preserve the original navigation callbacks and page identifiers.
     for row_items in (nav_items[:3], nav_items[3:6], nav_items[6:]):
-        cols = st.columns(3)
+        cols = st.columns(3, gap="medium")
         for col, (label, number) in zip(cols, row_items):
             with col:
                 if st.button(label, key=f"mueen_nav_{number}", use_container_width=True):
                     st.session_state["mueen_active_page"] = number
                     st.rerun()
-    st.caption("🏠 الصفحة الرئيسية · اختر بطاقة للانتقال إلى القسم المطلوب")
+    st.caption("اختر القسم المناسب لدورك؛ القرارات التعليمية النهائية يراجعها المعلم.")
+    st.markdown("""
+    <section class="mueen-pro-journey" dir="rtl" aria-label="رحلة عمل الوكيل الذكي">
+      <div class="mueen-pro-section-head">
+        <h3>🧭 دورة عمل وكيل مُعين الذكي</h3>
+        <p>رحلة القرار التعليمي — من التشخيص إلى التحسين المستمر</p>
+      </div>
+      <div class="mueen-pro-steps">
+        <div class="mueen-pro-step"><b>01</b><strong>تحليل التقييم</strong><small>قراءة مؤشرات المهارات</small></div>
+        <div class="mueen-pro-step"><b>02</b><strong>تحديد الأولويات</strong><small>تمييز فجوات التعلم</small></div>
+        <div class="mueen-pro-step"><b>03</b><strong>اقتراح التدخل</strong><small>خطة تعليمية قابلة للمراجعة</small></div>
+        <div class="mueen-pro-step"><b>04</b><strong>مراجعة المعلم</strong><small>القرار البشري أولًا</small></div>
+        <div class="mueen-pro-step"><b>05</b><strong>قياس الأثر</strong><small>مقارنة التقييمات</small></div>
+        <div class="mueen-pro-step"><b>06</b><strong>تحسين القرار</strong><small>الاستفادة من نتائج المتابعة</small></div>
+      </div>
+      <div class="mueen-pro-note">المراحل توضيحية؛ تنفيذها الفعلي ونتائجها يظهران في أقسام الوكيل والتقارير.</div>
+    </section>
+    """, unsafe_allow_html=True)
+    from mueen_agent_intelligence_center import render_agent_intelligence_center
+    render_agent_intelligence_center(get_supabase, get_selected_school_id)
 else:
     st.markdown("""
     <style>
@@ -2398,10 +2437,36 @@ with mueen_page(6):
                         st.error("تعذر عرض الهيكل الأكاديمي.")
                         st.caption(str(e)[:500])
 
+def _mueen_sidebar_navigate():
+    st.session_state["mueen_active_page"] = st.session_state["mueen_sidebar_page"]
+
 with st.sidebar:
-    st.header("إعدادات التحليل")
-    subject=st.selectbox("المادة",["الحوسبة","الرياضيات","العلوم","اللغة العربية","اللغة الإنجليزية"])
-    grade=st.selectbox("الصف",["الخامس","السادس","السابع","الثامن","التاسع"])
+    if st.session_state.get("mueen_sidebar_page") != st.session_state.get("mueen_active_page", 0):
+        st.session_state["mueen_sidebar_page"] = st.session_state.get("mueen_active_page", 0)
+    st.markdown("""
+    <div class="mueen-quick-head" dir="rtl">
+      <div class="mueen-quick-icon">🧭</div>
+      <div><div class="mueen-quick-title">الوصول السريع</div>
+      <div class="mueen-quick-subtitle">تنقّل بسهولة بين أقسام مُعين</div></div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.selectbox(
+        "انتقل مباشرة إلى",
+        options=list(range(len(nav_items))),
+        index=int(st.session_state.get("mueen_active_page", 0)),
+        format_func=lambda page: nav_items[page][0],
+        key="mueen_sidebar_page",
+        on_change=_mueen_sidebar_navigate,
+    )
+    st.divider()
+    st.header("⚙️ إعدادات التحليل")
+    subject=st.selectbox("المادة", [
+        "الحوسبة", "الرياضيات", "العلوم", "اللغة العربية", "اللغة الإنجليزية",
+        "الفيزياء", "الكيمياء", "الأحياء", "الدراسات الاجتماعية",
+        "التربية الإسلامية", "التربية الأخلاقية", "التربية البدنية والصحية",
+        "التصميم والتكنولوجيا", "إدارة الأعمال", "الاقتصاد"
+    ], help="مواد شائعة للاختيار العام؛ المواد المعتمدة فعليًا لكل صف تحددها المدرسة والخطة الدراسية.")
+    grade=st.selectbox("الصف",["الخامس","السادس","السابع","الثامن","التاسع","العاشر","الحادي عشر","الثاني عشر"])
     threshold=st.slider("حد الإتقان (%)",50,100,80,5)
     output_language = st.selectbox(
     "لغة المخرجات" if st.session_state.get("mueen_language", "العربية") == "العربية"
